@@ -7,7 +7,7 @@ This repository implements Qode, a Deno/TypeScript CLI and Language Server Proto
 Read these files before implementing a goal:
 
 - [PRD.md](./PRD.md): current milestone goals, scope, testable iterations, and exit criteria.
-- [IMPL.md](./IMPL.md): implementation tracking. Mark the active goal before coding and mark completed goals with `[DONE]`.
+- [IMPL.md](./IMPL.md): local per-user implementation tracking. Mark the active goal before coding, mark completed goals with `[DONE]`, and keep this file uncommitted unless the user explicitly asks otherwise.
 - [ARCHITECTURE.md](./ARCHITECTURE.md): durable module and service design.
 - [README.md](./README.md): product-facing behavior and documentation promises.
 - [deno.json](./deno.json): tasks, compiler settings, formatting, and import map.
@@ -100,5 +100,5 @@ Create semantically related commits that are small enough for a human to review 
 - Keep each commit to one coherent idea.
 - Aim for changes in the hundreds of lines at most, never thousands.
 - Commit tests with the implementation they validate unless a failing test commit is intentionally useful for review.
-- Commit [IMPL.md](./IMPL.md) updates with the slice they describe, or as their own small bookkeeping commit immediately after the described state changes.
+- Do not stage or commit [IMPL.md](./IMPL.md) unless the user explicitly asks for that file to be committed; it is local per-user state.
 - Do not include generated or probe-only changes unless they are intentionally part of the implementation.

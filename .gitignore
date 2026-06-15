@@ -12,6 +12,7 @@ coverage/
 .env
 .env.*
 !.env.example
+IMPL.md
 
 # Logs
 *.log
