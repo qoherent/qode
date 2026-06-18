@@ -1,9 +1,9 @@
-import { runQodeCommand } from './cli/mod.ts'
+import { runSigilCommand } from './cli/mod.ts'
 
-export { runQodeCommand } from './cli/mod.ts'
+export { runSigilCommand } from './cli/mod.ts'
 
 if (import.meta.main) {
-  const result = runQodeCommand(Deno.args)
+  const result = runSigilCommand(Deno.args)
   const encoder = new TextEncoder()
 
   if (result.stdout.length > 0) {

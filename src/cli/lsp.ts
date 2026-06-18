@@ -1,8 +1,8 @@
 import { type CommandResult, fail, hasHelpFlag, ok } from './commands.ts'
 
-const LSP_HELP = `Usage: qode lsp [--help]
+const LSP_HELP = `Usage: sigil lsp [--help]
 
-starts the Qode language server over stdio.
+starts the Sigil language server over stdio.
 `
 
 export function handleLspCommand(args: readonly string[]): CommandResult {
@@ -12,8 +12,8 @@ export function handleLspCommand(args: readonly string[]): CommandResult {
 
   const unknownOption = args.find((arg) => arg.startsWith('-'))
   if (unknownOption !== undefined) {
-    return fail(`qode lsp: unknown option: ${unknownOption}\n`)
+    return fail(`sigil lsp: unknown option: ${unknownOption}\n`)
   }
 
-  return fail('qode lsp: language server is not implemented yet\n')
+  return fail('sigil lsp: language server is not implemented yet\n')
 }

@@ -1,2 +1,2 @@
-export { runQodeCommand } from './commands.ts'
+export { runSigilCommand } from './commands.ts'
 export type { CommandResult } from './commands.ts'

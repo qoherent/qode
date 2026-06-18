@@ -7,17 +7,17 @@ export interface CommandResult {
   stderr: string
 }
 
-export const MAIN_HELP = `Usage: qode <command> [options]
+export const MAIN_HELP = `Usage: sigil <command> [options]
 
 Commands:
-  qode check <files...>  Validate .qode concept files.
-  qode lsp              Start the Qode language server.
+  sigil check <files...>  Validate .sigil component files.
+  sigil lsp              Start the Sigil language server.
 
 Options:
   -h, --help            Show help.
 `
 
-export function runQodeCommand(args: readonly string[]): CommandResult {
+export function runSigilCommand(args: readonly string[]): CommandResult {
   const [command, ...commandArgs] = args
 
   if (command === undefined || isHelpFlag(command)) {

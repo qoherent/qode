@@ -1,36 +1,36 @@
 import { assertEquals, assertStringIncludes } from '@std/assert'
-import { runQodeCommand } from '../src/cli/mod.ts'
+import { runSigilCommand } from '../src/cli/mod.ts'
 
-Deno.test('qode --help returns usage text', () => {
-  const result = runQodeCommand(['--help'])
+Deno.test('sigil --help returns usage text', () => {
+  const result = runSigilCommand(['--help'])
 
   assertEquals(result.status, 0)
-  assertStringIncludes(result.stdout, 'Usage: qode')
-  assertStringIncludes(result.stdout, 'qode check')
-  assertStringIncludes(result.stdout, 'qode lsp')
+  assertStringIncludes(result.stdout, 'Usage: sigil')
+  assertStringIncludes(result.stdout, 'sigil check')
+  assertStringIncludes(result.stdout, 'sigil lsp')
   assertEquals(result.stderr, '')
 })
 
-Deno.test('qode check with no files reports a clear error', () => {
-  const result = runQodeCommand(['check'])
+Deno.test('sigil check with no files reports a clear error', () => {
+  const result = runSigilCommand(['check'])
 
   assertEquals(result.status, 1)
   assertEquals(result.stdout, '')
-  assertStringIncludes(result.stderr, 'qode check')
+  assertStringIncludes(result.stderr, 'sigil check')
   assertStringIncludes(result.stderr, 'expected at least one file')
 })
 
-Deno.test('qode lsp --help documents language server startup', () => {
-  const result = runQodeCommand(['lsp', '--help'])
+Deno.test('sigil lsp --help documents language server startup', () => {
+  const result = runSigilCommand(['lsp', '--help'])
 
   assertEquals(result.status, 0)
-  assertStringIncludes(result.stdout, 'Usage: qode lsp')
-  assertStringIncludes(result.stdout, 'starts the Qode language server')
+  assertStringIncludes(result.stdout, 'Usage: sigil lsp')
+  assertStringIncludes(result.stdout, 'starts the Sigil language server')
   assertEquals(result.stderr, '')
 })
 
 Deno.test('invalid commands return non-zero status', () => {
-  const result = runQodeCommand(['unknown'])
+  const result = runSigilCommand(['unknown'])
 
   assertEquals(result.status, 1)
   assertEquals(result.stdout, '')
