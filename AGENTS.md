@@ -1,6 +1,6 @@
 # AGENTS.md
 
-This repository implements Qode, a Deno/TypeScript CLI and Language Server Protocol milestone for `.qode` concept files.
+This repository implements Sigil, a Deno/TypeScript CLI and Language Server Protocol project for `.sigil` component files.
 
 ## Start Here
 
@@ -20,11 +20,11 @@ Before running the full sanity suite, read [IMPL.md](./IMPL.md) for the latest r
 
 - If [IMPL.md](./IMPL.md) already records a passing baseline for this machine and the required tools have not changed, do not rerun the full first-start suite.
 - Run only the checks needed for new or changed requirements, such as a newly required tool, changed dependency, changed Deno task, or suspicious local state.
-- If no usable baseline is recorded for this machine, validate the full toolchain before editing code.
+- If no usable baseline is recorded for this machine, validate the toolchain before editing code.
 - Record the date, machine/user context when available, commands run, pass/fail state, and any missing or failing item in [IMPL.md](./IMPL.md) before proceeding.
 - If dependency probes update `deno.lock`, keep the change only when the implementation will use those dependencies. Otherwise revert probe-only lockfile noise and note that in [IMPL.md](./IMPL.md).
 
-Run:
+Baseline commands:
 
 ```sh
 pwd
@@ -39,21 +39,19 @@ which node
 which npm
 which rg
 deno task
-deno eval "import ts from 'npm:typescript'; console.log(ts.version); console.log(typeof ts.createSourceFile)"
-deno eval "import * as lsp from 'npm:vscode-languageserver-protocol'; console.log(typeof lsp.RequestType); console.log(lsp.InitializeRequest.method)"
-deno eval "import * as server from 'npm:vscode-languageserver/node'; console.log(typeof server.createConnection); console.log(typeof server.TextDocuments)"
-deno eval "const f = await Deno.makeTempFile({ suffix: '.qode' }); await Deno.writeTextFile(f, 'concept X { goal: test }'); console.log((await Deno.readTextFile(f)).includes('concept X')); await Deno.remove(f)"
+deno eval "const f = await Deno.makeTempFile({ suffix: '.sigil' }); await Deno.writeTextFile(f, 'component X { goal { test } interface { } }'); console.log((await Deno.readTextFile(f)).includes('component X')); await Deno.remove(f)"
 deno fmt --check
 deno check src/main.ts tests/**/*.ts
 deno test --allow-net tests/
 deno task build
 ```
 
+Optional host-language adapter probes should be run only when the active goal needs them.
+
 Expected baseline:
 
 - Deno, Git, Node, npm, and `rg` are available.
-- `npm:typescript`, `npm:vscode-languageserver-protocol`, and `npm:vscode-languageserver/node` resolve under Deno.
-- Deno file IO works for `.qode` fixture-style tests.
+- Deno file IO works for `.sigil` fixture-style tests.
 - Formatting, type checking, tests, and build pass before milestone work begins.
 
 ## Goal Workflow
@@ -69,7 +67,7 @@ Each PRD goal is a testable iteration. Loop until the goal's exit criteria pass.
 
 For each goal:
 
-1. Write or update focused tests first, or document why the existing failing test already covers the goal.
+1. Write or update focused tests first, or document why an existing failing test already covers the goal.
 2. Implement the smallest coherent slice.
 3. Run the required checks.
 4. If any required check fails, inspect the failure, patch the implementation, and rerun.

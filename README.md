@@ -1,294 +1,232 @@
-# Qode
+# Sigil
 
-Qode is a typed architectural specification language for LLM-first implementation.
+Sigil is an architecture-level execution language designed for iteration.
 
-It is a compact language for describing software and systems at the architectural level: precise enough for an LLM to simulate, test, and eventually implement, but intentionally less detailed than code.
+It lets architects describe and execute a system before every part has a real implementation. Unresolved parts remain executable while the architect progressively removes invention and replaces pretend execution with deliberate logic, generated implementation code, or real implementation code.
 
-The specification is the source of truth.
+The loop:
 
-The first practical milestone is editor and CLI support for the language: parsing, diagnostics, TypeScript-compatible declarations, and LSP navigation. Runtime LLM execution is a future milestone, not part of the current LSP PRD.
+```text
+describe
+→ compile semantically
+→ run
+→ pause and inspect
+→ expose assumptions
+→ refine
+→ implement selected parts
+→ repeat
+```
 
-See [PRD.md](./PRD.md) for the current LSP execution plan and [ARCHITECTURE.md](./ARCHITECTURE.md) for durable technical design.
+## Language Shape
 
-## Product Idea
+Sigil source files use `.sigil`.
 
-Code combines several distinct concerns:
+```sigil
+from "./sub/system.sigil" import { Gallery, Reviews }
 
-- what a system is for
-- what it exposes
-- what states it can occupy
-- how it should behave
-- how that behavior happens to be implemented
-
-Qode separates architectural meaning from implementation.
-
-Its design goal is:
-
-> A concept is sufficiently specified when a human or LLM can operate its interface without reading or writing its implementation.
-
-This makes it possible to validate an architecture before committing to code.
-
-## Core Form
-
-```ts
-concept Name<T> {
-  goal:
-    why the concept exists and what outcome it enables.
-
-  definition {
-    type declarations;
-    internal capabilities and function signatures;
+component ProductPage {
+  goal {
+    help a shopper decide whether this product is right for them
   }
 
   interface {
-    externally accessible constructors, methods, fields, ports, or messages;
+    header {
+      +Gallery
+    }
+
+    middle {
+      +Reviews for the current product
+    }
+  }
+
+  internal {
+    +ProductRepository
   }
 
   state {
-    architecturally meaningful states and their typed data;
+    loading
+    ready with product, gallery, reviews
+    failed with recoverable reason
   }
 
-  behavior:
-    typed English describing transitions, conditions, invariants, and edge cases.
+  logic {
+    load product details
+    load gallery and reviews in parallel
+    show ready view when required data is present
+  }
+
+  constraints {
+    never expose private customer data
+    product title remains visible before reviews
+  }
+
+  cases {
+    product loads with reviews and gallery
+    reviews fail while product details remain usable
+  }
 }
 ```
 
-## Meaning of Each Section
-
-`concept` defines the system boundary and its identity. A concept may later be decomposed into smaller concepts using the same structure recursively.
-
-`goal` describes why the system exists. It gives the top-down criterion against which generated implementations and design choices can be judged.
-
-`definition` provides the concept's vocabulary and internal capabilities. It combines TypeScript-compatible type declarations and function signatures that matter architecturally but are not necessarily part of the public interface.
-
-`interface` defines how the surrounding system can interact with the concept. It represents architectural inputs and outputs, not implementation methods by default.
-
-`state` defines the meaningful modes the concept may occupy. State declarations establish the system's state-machine vocabulary without prescribing how state is stored.
-
-`behavior` defines how the concept acts over time. It explains, in concise English and using declared types, how interface calls and external conditions affect state and outputs.
-
-## Design Principles
-
-### Architect-Level, Not Coder-Level
-
-The specification describes observable structure and behavior.
-
-It should not describe queues, fields, algorithms, loops, storage layout, mutation strategy, or other implementation details unless they are themselves architecturally significant.
-
-### TypeScript-Compatible Declarations
-
-Where formal precision is valuable, Qode reuses TypeScript syntax and semantics:
-
-- generics
-- function signatures
-- interfaces
-- aliases
-- unions
-- intersections
-- optional values
-- structural typing
-- utility types
-
-Qode may use its own parser and AST, but should remain close enough to TypeScript to reuse parts of its ecosystem, type definitions, tooling concepts, diagnostics, and syntax highlighting.
-
-### Explicit State Machines
-
-State cannot be reduced to prose without losing architectural meaning.
-
-```ts
-state {
-  Waiting;
-  Value<T>;
-  Failure(reason: Reason);
-}
-```
-
-These are architectural states, not an object's internal storage representation.
-
-### Behavior Is Typed English
-
-After the typed declarations and state model, behavior is written in concise natural language.
-
-The prose must use the names and types already declared in the concept.
-
-It describes:
-
-- state transitions
-- transition conditions
-- outputs
-- continuation and propagation
-- concurrency or timing expectations
-- invariants
-- exceptional cases
-- ignored or forbidden operations
-
-The language does not attempt to replace English with another low-level event DSL. An LLM interpretation pass is assumed in future runtime milestones.
-
-## Example
-
-```ts
-concept Promise<T> {
-  goal:
-    a non-blocking handle to a value that may arrive now, later, or fail.
-
-  definition {
-    type Reason = any;
-    type Handler<I, O> = (input: I) => O | PromiseLike<O>;
-
-    resolve(value: T | PromiseLike<T>): void;
-    reject(reason?: Reason): void;
-  }
-
-  interface {
-    new Promise<T>(
-      execute: (
-        resolve: (value: T | PromiseLike<T>) => void,
-        reject: (reason?: Reason) => void
-      ) => void
-    );
-
-    then<U>(fn: Handler<T, U>): Promise<U>;
-    catch<U>(fn: Handler<Reason, U>): Promise<T | U>;
-  }
-
-  state {
-    Pending;
-    Resolved(value: T);
-    Rejected(reason: Reason);
-  }
-
-  behavior:
-    A new Promise starts Pending and immediately runs execute(resolve, reject).
-
-    While Pending, resolve(value) settles the Promise as Resolved(value).
-    If value is PromiseLike<T>, the Promise follows its eventual outcome.
-
-    While Pending, reject(reason) settles the Promise as Rejected(reason).
-
-    Once settled, later resolve or reject calls have no effect.
-
-    then(fn) intercepts a resolved value.
-    catch(fn) intercepts a rejected reason.
-
-    A non-matching handler is skipped and the existing outcome continues.
-
-    A handler produces a new Promise for its returned value, followed
-    PromiseLike, or thrown error.
-
-    A handler attached while Pending runs after the Promise settles.
-
-    Multiple handlers attached to one Promise are independent and each
-    matching handler runs once.
-}
-```
-
-## Current Milestone: LSP and CLI
-
-The current implementation target is language tooling:
-
-- parse `.qode` files
-- validate TypeScript-compatible regions
-- expose diagnostics through CLI and LSP
-- generate virtual TypeScript declarations for editor intelligence
-- support navigation between concept files and configured TypeScript implementations
-- compile to a self-contained `qode` binary
-
-The current milestone is detailed in [PRD.md](./PRD.md).
-
-## Future Milestones
-
-### LLM Semantic Execution
-
-The first executable form of a concept can be a semantic stub:
-
-```ts
-export function add(a: number, b: number): number {
-  return LLM.pretend()
-}
-```
-
-The runtime supplies the LLM with:
-
-- the relevant concept
-- the invoked interface member
-- typed arguments
-- expected return type
-- current conceptual state
-- applicable behavioral rules
-
-The LLM returns the result and any state transition described by the specification.
-
-This is not a conventional mock. A mock contains manually programmed substitute behavior. A semantic stub derives substitute behavior from the architectural specification.
-
-### Hybrid Implementation
-
-Implemented members run as normal code. Unimplemented members continue to use semantic stubs.
-
-### Concrete Implementation
-
-Real code replaces all semantic stubs. The concept remains the architectural contract and can generate tests, documentation, state diagrams, implementation plans, and conformance checks.
-
-## Development Lifecycle
+The conventional section order is:
 
 ```text
-Concept specification
-  |
-Type and state validation
-  |
-LLM semantic execution
-  |
-Examples, tests, prototypes, and UX validation
-  |
-Hybrid implementation
-  |
-Real implementation
-  |
-Conformance checking against the original concept
+goal
+interface
+internal
+state
+logic
+constraints
+cases
 ```
 
-The current project is at the type, state, CLI, and LSP validation stage.
+This order is only a readability convention. It has no semantic effect.
 
-## Relationship to Systems Thinking
+The mandatory semantic units are `component`, `goal`, and `interface`.
+
+Optional sections:
+
+- `internal`
+- `state`
+- `logic`
+- `constraints`
+- `cases`
+
+## Section Meaning
+
+`goal` explains why the component exists and what outcome it enables.
+
+`interface` is the component boundary: everything the environment can see, call, supply, receive, render, interact with, subscribe to, or publicly depend on.
+
+`internal` names private things that exist inside the component: private components, dependencies, resources, services, capabilities, functions, types, domain vocabulary, and static relationships.
 
 ```text
-concept    = system boundary
-goal       = purpose and desired outcome
-definition = shared vocabulary and internal capabilities
-interface  = inputs and outputs
-state      = system memory and modes
-behavior   = transitions, feedback, propagation, and edge cases
+internal = what privately exists
+state    = what changes over time
+logic    = what executes
 ```
 
-Hierarchy is recursive: any concept may be opened and described as a system of smaller concepts.
+`state` describes architecturally meaningful configurations that persist or change during execution. It is not storage layout.
 
-## Positioning
+`logic` describes executable architecture-level decisions, ordering, dataflow, delegation, and state transitions.
 
-Qode is not intended to be:
+`constraints` are universal truths over all valid executions.
 
-- a general-purpose programming language
-- a formal verification language
-- a code-shaped state-machine DSL
-- a collection of test scenarios
-- a prompt format
-- a replacement for TypeScript
+`cases` are representative externally observable situations and acceptance criteria. They are examples, not the complete behavior of the component.
 
-It is an architectural source language designed for a world where LLMs can interpret intent and fill the gap between specification and implementation.
+## Semantic Lines
 
-Its central product proposition is:
+Inside each section, authors may use whatever notation best expresses the idea: concise English, pseudocode, math, arrows, host-language-like syntax, domain notation, ASCII sketches, or combinations.
 
-> Specify the system once at the level architects reason about it, execute that meaning immediately through an LLM, and replace simulation with real code without changing the contract.
+A new line separates semantically distinct things. Each non-empty semantic line is a source unit, breakpoint location, interpretation unit, diff unit, and source mapping target.
+
+Sigil does not require semicolons or a universal type grammar inside sections.
+
+## Composition
+
+Imports make component declarations available. A line beginning with `+` composes a referenced component.
+
+```sigil
+interface {
+  +Gallery
+  +Reviews for the current product
+}
+```
+
+```sigil
+internal {
+  +ProductRepository
+  +Analytics
+}
+```
+
+The containing section determines architectural role:
+
+- `interface +Component`: public or user-visible composition
+- `internal +Component`: private composition or dependency
+
+## Frontend and Backend
+
+Sigil is not backend-only.
+
+Frontend `interface` blocks may describe visual composition, spatial relationships, responsive layouts, state-dependent views, overlays, focus behavior, accessibility, motion, design tokens, ASCII layout sketches, or direct CSS-like details when useful.
+
+Backend `interface` blocks may describe functions, endpoints, commands, queries, messages, events, streams, outputs, and externally visible effects.
+
+These are authoring idioms, not mandatory subgrammars.
+
+## Type Policy
+
+Sigil does not own a universal type system.
+
+Authors may write TypeScript-style declarations, Rust-style declarations, Python typing, Java declarations, mathematical notation, domain notation, or ordinary English. Host-language tooling may be added later as an adapter, but no host language defines core Sigil semantics.
+
+## Execution Model
+
+The authored source is not the final runtime AST.
+
+```text
+Sigil source
+→ structural parsing
+→ semantic normalization by an LLM compiler harness
+→ normalized semantic graph / AST
+→ executable architecture
+```
+
+A running system may mix:
+
+- real implementation code
+- generated implementation code
+- executable Sigil logic
+- `LLM.pretend`
+
+The compiler must record assumptions and provenance whenever it introduces meaning not directly present in the source. Semantic closure measures how much invention remains. Green closure is evidence of convergence under the configured process, not mathematical proof.
+
+## Current Milestone
+
+The repository is at the command-scaffold stage. The next milestone is structural tooling, not the full runtime.
+
+Milestone breakdown:
+
+1. Rename the public command and binary to `sigil`.
+2. Parse `.sigil` files into a source-ranged structural AST.
+3. Index imports, component declarations, and `+Component` composition.
+4. Provide offline structural LSP features.
+5. Make `sigil check` useful for deterministic structural validation.
+6. Define interfaces for future semantic normalization, provenance, closure, traces, and replay.
+7. Keep host-language tooling optional and adapter-based.
+
+See [PRD.md](./PRD.md) for the execution plan and [ARCHITECTURE.md](./ARCHITECTURE.md) for the durable technical design.
+
+## Target CLI
+
+```sh
+sigil check path/to/system.sigil
+sigil lsp
+```
+
+The first implementation task in the current milestone makes the built binary and help text match this public surface.
 
 ## Development
 
 ```sh
-deno task dev
 deno task test
 deno task check
 deno task build
 ```
 
-The built binary is written to `build/qode`.
+After the command rename lands, the build output should be:
 
-## Architecture
+```text
+build/sigil
+```
 
-See [ARCHITECTURE.md](./ARCHITECTURE.md) for parser, AST, TypeScript projection, language service, LSP, and CLI architecture.
+## Not This
+
+Sigil is not:
+
+- a general-purpose programming language
+- a formal proof system
+- a mandatory pseudocode grammar
+- a prompt file format
+- a universal type system
+- a replacement for host implementation languages
