@@ -1111,6 +1111,7 @@ checksum = "b9be42f50aa861c555654aa3a37f52f4b1074bacf4e48fe0ef7fa584e80f1f0f"
 [[package]]
 name = "snapdir-core"
 version = "1.10.0"
+source = "git+https://github.com/qoherent/snapdir.git?rev=b5e5780#b5e578009bed224b9c3b1dceb4ed1e929c4402f7"
 dependencies = [
  "blake3",
  "libc",

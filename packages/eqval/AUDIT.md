@@ -17,7 +17,7 @@ implemented in this folder yet.
 
 This audit is based on the source inspection that motivated the refactor,
 including executable code in `repos/egglog/`, `repos/snapdir/`, and Sigil's
-vendored Snapdir integration. It is a static assessment, not a compiler run,
+Snapdir integration. It is a static assessment, not a compiler run,
 benchmark, proof execution, or independent semantic reconstruction. Acceptance
 criteria below are future implementation checks, not reported passing tests.
 
@@ -332,10 +332,12 @@ where it is needed alongside native expression proofs.
 [sigilc's Cargo.toml](../sigilc/Cargo.toml) pins Egglog to
 `90635860397ce710f8c0a4eeb04154a8ebc3ac05`; the inspected local Egglog manifest
 declares version `3.0.0`. The inspection did not establish checkout/pin equality.
-Sigil's Snapdir dependency is patched to `vendor/snapdir-core`, not directly
-built from `repos/snapdir`. The inspected relevant vendored hash/walk mechanisms
-match with portability changes. Record actual build sources and law/runtime
-identity; do not promise an API because a neighboring checkout exposes it.
+Sigil's Snapdir dependency is built from the `qoherent/snapdir` fork at
+revision `b5e578009bed224b9c3b1dceb4ed1e929c4402f7`. That fork carries the
+small portability changes previously held in the deleted vendored copy; the
+inspected relevant hash/walk mechanisms otherwise match upstream. Record actual
+build sources and law/runtime identity; do not promise an API because a
+neighboring checkout exposes it.
 
 Finite vocabulary does not imply finite term generation. Use bounded acyclic
 initial models and a small sound rule set; avoid unrestricted expansion when
@@ -364,7 +366,7 @@ code. Canonical language clarifications govern over narrower old specifications.
 | [request module](../sigilc/src/request.rs), [CLI](../sigilc/src/cli.rs), store/report process fields | Remove compiler-owned requests, attempts, receipts, artifact evidence, and `--evidence`; introduce the prepared semantic binding handoff without losing publication correctness. |
 | [sigilc README](../sigilc/README.md), governing `packages/sigilc/*.sigil`, [repository Sigil skill](../../integrations/skills/sigil/SKILL.md), its references and evals | Switch command and authoring guidance with the implemented boundary. Keep external reconstruction independent and scope semantic, not scheduled work. |
 | [Older language reference](../../spec/sigil-language.md), [language contract](../../spec/language.sigil), and relevant decisions | Reconcile narrower claims with [canonical language](../../language.md), including arbitrary Concepts per Component, native Facets, and public terms defined within Interface Facets. |
-| [sigilc dependencies](../sigilc/Cargo.toml), actual Egglog build source, and `vendor/snapdir-core` | Select compatible proof APIs, record actual runtime/build identities, and preserve the documented hashing/capture limits. No engine fork is presumed necessary. |
+| [sigilc dependencies](../sigilc/Cargo.toml), actual Egglog build source, and the pinned `qoherent/snapdir` fork | Select compatible proof APIs, record actual runtime/build identities, and preserve the documented hashing/capture limits. No engine fork is presumed necessary. |
 
 ## Implementation sequence
 

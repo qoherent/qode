@@ -11,16 +11,13 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 getrandom = "0.3.4"
 regex = "1"
-snapdir-core = { git = "https://github.com/bermi/snapdir.git", rev = "5fef1d97e0cbf073fb5b443f8e7e26d147625e98" }
+snapdir-core = { git = "https://github.com/qoherent/snapdir.git", rev = "b5e5780" }
 # Keep hashing cross-compilable without platform-specific assembler tools.
 blake3 = { version = "1.8.5", features = ["pure"] }
 rio_api = "0.8.5"
 rio_turtle = "0.8.5"
 oxiri = "0.2.11"
 oxilangtag = "0.1.6"
-
-[patch."https://github.com/bermi/snapdir.git"]
-snapdir-core = { path = "../../vendor/snapdir-core" }
 
 [profile.release]
 opt-level = 2
