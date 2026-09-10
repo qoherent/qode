@@ -1,4 +1,4 @@
-//! Small disposable index and atomic per-source publication. No job registry.
+//! Small disposable index and atomic per-source publication. No external-work registry.
 use crate::{
     assertions,
     frontend::normalized_path,
@@ -14,17 +14,14 @@ use std::{
     path::{Path, PathBuf},
 };
 
-pub const ARTIFACT_EVIDENCE_VERSION: u32 = 1;
 
 const WORLDS: &str = ".sigil/worlds";
 const INDEX: &str = ".sigil/worlds/index.json";
-const WORKFLOW_STATE: &str = ".sigil/workflow/request.json";
-const WORKFLOW_ARCHIVE: &str = ".sigil/workflow/archive";
-const WORKFLOW_INPUTS: &str = ".sigil/workflow/inputs";
+const INDEX_VERSION: u32 = 3;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Job {
+pub struct PreparedBinding {
     pub version: u32,
     pub binding: Binding,
     pub expected_generation: Option<String>,
@@ -36,220 +33,6 @@ pub struct Entry {
     pub binding: Binding,
     pub assertion_checksum: String,
     pub generation: String,
-    #[serde(default)]
-    pub artifact: Option<ArtifactEvidence>,
-}
-
-/// Caller-supplied links retained with an accepted projection. These are
-/// references to external process/output records, never model assertions.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct ArtifactEvidence {
-    pub version: u32,
-    pub binding: String,
-    pub generation: String,
-    pub preparation: String,
-    pub job: String,
-    pub job_fingerprint: String,
-    pub worker: String,
-    pub ingest: String,
-    pub attempts: Vec<ArtifactAttempt>,
-    pub projection: String,
-    pub complete: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct ArtifactAttempt {
-    pub turtle: String,
-    pub result: String,
-    pub exit: u8,
-}
-
-/// An external attempt record. The final pending attempt intentionally has no
-/// exit yet: native ingest records its actual successful exit during publication.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct ArtifactAttemptInput {
-    pub turtle: String,
-    pub result: String,
-    pub exit: Option<u8>,
-}
-
-/// Input written by the external subagent/caller. Rejected attempts carry their
-/// observed exit; the final attempt is pending and becomes exit zero only when
-/// this native command accepts the projection.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct ArtifactEvidenceInput {
-    pub version: u32,
-    pub preparation: String,
-    pub job: String,
-    pub worker: String,
-    pub ingest: String,
-    pub attempts: Vec<ArtifactAttemptInput>,
-}
-
-const MAX_ARTIFACT_REF_BYTES: usize = 4_096;
-const MAX_ARTIFACT_ATTEMPTS: usize = 128;
-
-impl ArtifactEvidenceInput {
-    pub fn validate(&self) -> Result<(), String> {
-        if self.version != ARTIFACT_EVIDENCE_VERSION {
-            return Err("unsupported artifact evidence version".into());
-        }
-        for (name, value) in [
-            ("preparation", &self.preparation),
-            ("job", &self.job),
-            ("worker", &self.worker),
-            ("ingest", &self.ingest),
-        ] {
-            validate_artifact_ref(name, value)?;
-        }
-        if self.attempts.is_empty() {
-            return Err("artifact evidence requires at least one ingest attempt".into());
-        }
-        if self.attempts.len() > MAX_ARTIFACT_ATTEMPTS {
-            return Err("artifact evidence has too many ingest attempts".into());
-        }
-        for (index, attempt) in self.attempts.iter().enumerate() {
-            validate_artifact_ref(&format!("attempt {index} Turtle"), &attempt.turtle)?;
-            validate_artifact_ref(&format!("attempt {index} result"), &attempt.result)?;
-            let is_final = index + 1 == self.attempts.len();
-            if is_final && attempt.exit.is_some() {
-                return Err(
-                    "final artifact evidence attempt must have exit null until native ingest accepts it"
-                        .into(),
-                );
-            }
-            if !is_final && attempt.exit.is_none() {
-                return Err("only the final artifact evidence attempt may have exit null".into());
-            }
-        }
-        Ok(())
-    }
-}
-
-impl ArtifactEvidence {
-    fn build(
-        input: Option<ArtifactEvidenceInput>,
-        current: &Binding,
-        generation: &str,
-        key: &str,
-        job: &Job,
-    ) -> Result<Self, String> {
-        let projection = format!(".sigil/worlds/{key}.egg");
-        let Some(input) = input else {
-            return Ok(Self {
-                version: 1,
-                binding: current.fingerprint(),
-                generation: generation.into(),
-                preparation: String::new(),
-                job: String::new(),
-                job_fingerprint: String::new(),
-                worker: String::new(),
-                ingest: String::new(),
-                attempts: Vec::new(),
-                projection,
-                complete: false,
-            });
-        };
-        input.validate()?;
-        let mut attempts: Vec<ArtifactAttempt> = input
-            .attempts
-            .iter()
-            .take(input.attempts.len() - 1)
-            .map(|attempt| ArtifactAttempt {
-                turtle: attempt.turtle.clone(),
-                result: attempt.result.clone(),
-                exit: attempt.exit.expect("validated non-final artifact attempt"),
-            })
-            .collect();
-        let accepted = input.attempts.last().expect("validated artifact attempts");
-        attempts.push(ArtifactAttempt {
-            turtle: accepted.turtle.clone(),
-            result: accepted.result.clone(),
-            exit: 0,
-        });
-        Ok(Self {
-            version: ARTIFACT_EVIDENCE_VERSION,
-            binding: current.fingerprint(),
-            generation: generation.into(),
-            preparation: input.preparation,
-            job: input.job,
-            job_fingerprint: hash(
-                &serde_json::to_vec(&("sigil-job-v2", job)).map_err(|e| e.to_string())?,
-            ),
-            worker: input.worker,
-            ingest: input.ingest,
-            attempts,
-            projection,
-            complete: true,
-        })
-    }
-
-    fn validate_for(&self, binding: &Binding, generation: &str, key: &str) -> Result<(), String> {
-        if self.version != ARTIFACT_EVIDENCE_VERSION
-            || self.binding != binding.fingerprint()
-            || self.generation != generation
-            || (self.complete && !checksum(&self.job_fingerprint))
-            || self.projection != format!(".sigil/worlds/{key}.egg")
-        {
-            return Err(format!("invalid artifact evidence for projection: {key}"));
-        }
-        if self.complete {
-            if self.attempts.is_empty() || self.attempts.len() > MAX_ARTIFACT_ATTEMPTS {
-                return Err(format!("invalid artifact attempts for projection: {key}"));
-            }
-            for (index, attempt) in self.attempts.iter().enumerate() {
-                validate_artifact_ref(&format!("attempt {index} Turtle"), &attempt.turtle)?;
-                validate_artifact_ref(&format!("attempt {index} result"), &attempt.result)?;
-            }
-            if self.attempts.last().is_none_or(|attempt| attempt.exit != 0) {
-                return Err(format!(
-                    "invalid accepted artifact attempt for projection: {key}"
-                ));
-            }
-            for (name, value) in [
-                ("preparation", &self.preparation),
-                ("job", &self.job),
-                ("worker", &self.worker),
-                ("ingest", &self.ingest),
-            ] {
-                validate_artifact_ref(name, value)?;
-            }
-            Ok(())
-        } else if self.preparation.is_empty()
-            && self.job.is_empty()
-            && self.job_fingerprint.is_empty()
-            && self.worker.is_empty()
-            && self.ingest.is_empty()
-            && self.attempts.is_empty()
-        {
-            Ok(())
-        } else {
-            Err(format!(
-                "invalid incomplete artifact evidence for projection: {key}"
-            ))
-        }
-    }
-}
-
-fn validate_artifact_ref(name: &str, value: &str) -> Result<(), String> {
-    if value.is_empty() {
-        return Err(format!("artifact evidence {name} reference is empty"));
-    }
-    if value.len() > MAX_ARTIFACT_REF_BYTES {
-        return Err(format!(
-            "artifact evidence {name} reference exceeds byte limit"
-        ));
-    }
-    if value.chars().any(char::is_control) {
-        return Err(format!(
-            "artifact evidence {name} reference contains control characters"
-        ));
-    }
-    Ok(())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -311,7 +94,7 @@ impl LockedStore {
         let (root, lock) = acquire(root)?;
         let index = match fs::symlink_metadata(sources::checked_path(&root, INDEX)?) {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Index {
-                version: 2,
+                version: INDEX_VERSION,
                 entries: BTreeMap::new(),
             },
             Err(e) => return Err(e.to_string()),
@@ -320,7 +103,7 @@ impl LockedStore {
             )
             .map_err(|e| format!("invalid projection index: {e}"))?,
         };
-        if index.version != 2 {
+        if index.version != INDEX_VERSION {
             return Err("unsupported projection index version".into());
         }
         for (key, entry) in &index.entries {
@@ -329,9 +112,6 @@ impl LockedStore {
                 || !checksum(&entry.assertion_checksum)
             {
                 return Err(format!("invalid projection index entry: {key}"));
-            }
-            if let Some(artifact) = &entry.artifact {
-                artifact.validate_for(&entry.binding, &entry.generation, key)?;
             }
         }
         Ok(Self {
@@ -344,65 +124,6 @@ impl LockedStore {
 
     pub fn entries(&self) -> &BTreeMap<String, Entry> {
         &self.index.entries
-    }
-
-    /// Read the single native scoped-request ledger while holding the same
-    /// workspace lock used for projection inspection and publication.
-    pub(crate) fn workflow_state(&self) -> Result<Option<Vec<u8>>, String> {
-        let path = sources::checked_path(&self.root, WORKFLOW_STATE)?;
-        match fs::read(path) {
-            Ok(bytes) => {
-                if bytes.len() as u64 > self.limits.max_index_bytes {
-                    Err("scoped request state exceeds byte limit".into())
-                } else {
-                    Ok(Some(bytes))
-                }
-            }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-            Err(e) => Err(e.to_string()),
-        }
-    }
-
-    /// Atomically replace the native scoped-request ledger. This state is
-    /// intentionally separate from `.sigil/worlds`, which remains disposable
-    /// projection cache data.
-    pub(crate) fn publish_workflow_state(&self, bytes: &[u8]) -> Result<(), String> {
-        if bytes.len() as u64 > self.limits.max_index_bytes {
-            return Err("scoped request state exceeds byte limit".into());
-        }
-        atomic_write(&self.root, WORKFLOW_STATE, bytes)
-    }
-
-    /// Keep the structural input used by a durable request outside caller-owned
-    /// temporary directories. Unlike worlds, this is request replay input.
-    pub(crate) fn publish_workflow_frontend(
-        &self,
-        fingerprint: &str,
-        bytes: &[u8],
-    ) -> Result<String, String> {
-        if bytes.len() as u64 > self.limits.max_index_bytes {
-            return Err("scoped request frontend capture exceeds byte limit".into());
-        }
-        if !checksum(fingerprint) {
-            return Err("invalid scoped request frontend fingerprint".into());
-        }
-        let path = format!("{WORKFLOW_INPUTS}/{fingerprint}.json");
-        atomic_write(&self.root, &path, bytes)?;
-        Ok(path)
-    }
-
-    /// Preserve the current request under its immutable fingerprint, then clear
-    /// the single active request slot. Request history stays native and separate
-    /// from disposable projection worlds.
-    pub(crate) fn archive_workflow_state(&self, fingerprint: &str) -> Result<String, String> {
-        let state = self
-            .workflow_state()?
-            .ok_or_else(|| "no scoped request exists; run request create".to_owned())?;
-        let archive = format!("{WORKFLOW_ARCHIVE}/{fingerprint}.json");
-        atomic_write(&self.root, &archive, &state)?;
-        fs::remove_file(sources::checked_path(&self.root, WORKFLOW_STATE)?)
-            .map_err(|e| e.to_string())?;
-        Ok(archive)
     }
 
     pub fn deleted_sources(
@@ -428,13 +149,13 @@ impl LockedStore {
     }
 
     /// Return a descriptor to the external caller before it supplies Turtle.
-    pub fn prepare(&self, binding: Binding) -> Result<Job, String> {
+    pub fn prepare(&self, binding: Binding) -> Result<PreparedBinding, String> {
         compatible(&binding)?;
         self.check_live(&binding)?;
         let expected_generation = self
             .entry_for(&binding)
             .map(|(_, entry)| entry.generation.clone());
-        Ok(Job {
+        Ok(PreparedBinding {
             version: 2,
             binding,
             expected_generation,
@@ -444,22 +165,21 @@ impl LockedStore {
     // @sigil implements packages/sigilc/store.sigil::SigilProjectionStore::ProjectionPublication interface
     pub fn publish(
         &mut self,
-        job: &Job,
+        prepared: &PreparedBinding,
         current: &Binding,
         facts: &[Assertion],
-        evidence: Option<ArtifactEvidenceInput>,
     ) -> Result<String, String> {
         compatible(current)?;
         let key = object_key(current)?;
-        if job.version != 2 || job.binding != *current {
+        if prepared.version != 2 || prepared.binding != *current {
             return Err("prepared semantic inputs no longer match current inputs".into());
         }
         if self
             .entry_for(current)
             .map(|(_, entry)| entry.generation.as_str())
-            != job.expected_generation.as_deref()
+            != prepared.expected_generation.as_deref()
         {
-            return Err("projection generation changed; prepare a new job".into());
+            return Err("projection generation changed; prepare a new binding".into());
         }
         self.check_live(current)?;
         if facts.len() > self.limits.assertions.max_assertions {
@@ -478,21 +198,15 @@ impl LockedStore {
         {
             let previous_key = history_key(&previous.binding)?;
             preserve_projection(&self.root, &key, &previous_key, self.limits)?;
-            let mut previous = previous;
-            if let Some(artifact) = &mut previous.artifact {
-                artifact.projection = format!(".sigil/worlds/{previous_key}.egg");
-            }
             proposed.entries.insert(previous_key, previous);
             proposed.entries.remove(&key);
         }
-        let artifact = ArtifactEvidence::build(evidence, current, &generation, &key, job)?;
         proposed.entries.insert(
             key.clone(),
             Entry {
                 binding: current.clone(),
                 assertion_checksum: hash(encoded.as_bytes()),
                 generation: generation.clone(),
-                artifact: Some(artifact),
             },
         );
         let data = serde_json::to_vec(&proposed).map_err(|e| e.to_string())?;
@@ -552,13 +266,6 @@ impl LockedStore {
             }),
             Err(_) => Ok(inspected(Freshness::Incomplete)),
         }
-    }
-
-    /// Return the accepted artifact chain for a complete binding. An absent
-    /// value means the projection predates native artifact evidence.
-    pub fn artifact(&self, binding: &Binding) -> Option<&ArtifactEvidence> {
-        self.entry_for(binding)
-            .and_then(|(_, entry)| entry.artifact.as_ref())
     }
 
     // @sigil implements packages/sigilc/store.sigil::SigilProjectionStore::BindingHistory interface

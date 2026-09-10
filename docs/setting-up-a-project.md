@@ -79,6 +79,6 @@ without changing authored files or external preparations. After cleaning, obtain
 required reconstructions again. Do not commit generated worlds as authored truth.
 
 Use the [native protocol reference](../integrations/skills/sigil/references/compilation-execution.md)
-for exact per-source inputs and exits. Independent workers and the coding loop
+for exact per-source inputs and exits. Independent interpreters and the coding loop
 remain external. Record current native states and unavailable prerequisites
 alongside ordinary tests and actual delivery evidence.

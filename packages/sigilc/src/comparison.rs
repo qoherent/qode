@@ -16,7 +16,7 @@ pub enum ImplementationState {
 }
 
 /// Assembly computes these flags after excluding stale/corrupt/unselected facts.
-/// They are not semantic assertions and are never supplied by a worker.
+/// They are not semantic assertions and are never supplied by an interpreter.
 #[derive(Debug, Clone, Copy, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FreshInputs {

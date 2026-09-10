@@ -36,9 +36,8 @@ Thumbs.db
 # External repos
 repos/
 
-# Disposable semantic worlds and external implementation-loop state
+# Disposable semantic worlds and caller-owned preparation state
 **/.sigil/worlds/
-**/.sigil/workflow/
 **/.sigil/tmp/
 .codex-progress/
 

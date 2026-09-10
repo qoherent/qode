@@ -2,7 +2,7 @@ mod support;
 use sigilc::{
     inputs::{Binding, PROJECTION_FORMAT, SemanticInput},
     sources::{capture, hash},
-    store::{Freshness, Job, LockedStore, StoreLimits},
+    store::{Freshness, PreparedBinding, LockedStore, StoreLimits},
     turtle::{self, TurtleLimits},
 };
 use support::Workspace;
@@ -29,18 +29,18 @@ fn open(root: &Workspace) -> LockedStore {
 }
 
 #[test]
-fn jobs_capture_generation_before_turtle_and_cannot_publish_out_of_order() {
+fn bindings_capture_generation_before_turtle_and_cannot_publish_out_of_order() {
     let root = Workspace::new();
     root.write("folder/a.py", b"first");
     let input = binding(&root, "folder/a.py");
-    let job = {
+    let prepared = {
         let store = open(&root);
         assert_eq!(store.inspect(&input).unwrap().status, Freshness::Missing);
         store.prepare(input.clone()).unwrap()
     };
-    let duplicate = serde_json::from_slice::<Job>(&serde_json::to_vec(&job).unwrap()).unwrap();
+    let duplicate = serde_json::from_slice::<PreparedBinding>(&serde_json::to_vec(&prepared).unwrap()).unwrap();
     let mut store = open(&root);
-    store.publish(&job, &input, &facts(), None).unwrap();
+    store.publish(&prepared, &input, &facts()).unwrap();
     assert!(
         root.0
             .join(".sigil/worlds/implementation/folder/a.py.egg")
@@ -49,15 +49,15 @@ fn jobs_capture_generation_before_turtle_and_cannot_publish_out_of_order() {
     assert_eq!(store.inspect(&input).unwrap().assertions, facts());
     assert!(
         store
-            .publish(&duplicate, &input, &[], None)
+            .publish(&duplicate, &input, &[])
             .unwrap_err()
             .contains("generation")
     );
     let replacement = store.prepare(input.clone()).unwrap();
-    store.publish(&replacement, &input, &[], None).unwrap();
+    store.publish(&replacement, &input, &[]).unwrap();
     assert_eq!(store.inspect(&input).unwrap().status, Freshness::Fresh);
     assert!(store.inspect(&input).unwrap().assertions.is_empty());
-    assert!(store.publish(&replacement, &input, &facts(), None).is_err());
+    assert!(store.publish(&replacement, &input, &facts()).is_err());
     assert!(
         LockedStore::open(&root.0, StoreLimits::default())
             .err()
@@ -77,14 +77,14 @@ fn changed_sources_catalogs_and_formats_reject_publication() {
     root.write("a.rs", b"one");
     let input = binding(&root, "a.rs");
     let mut store = open(&root);
-    let job = store.prepare(input.clone()).unwrap();
+    let prepared = store.prepare(input.clone()).unwrap();
     root.write("neighbor.rs", b"unrelated");
-    store.publish(&job, &input, &facts(), None).unwrap();
-    let job = store.prepare(input.clone()).unwrap();
+    store.publish(&prepared, &input, &facts()).unwrap();
+    let prepared = store.prepare(input.clone()).unwrap();
     root.write("a.rs", b"two");
     assert!(
         store
-            .publish(&job, &input, &[], None)
+            .publish(&prepared, &input, &[])
             .unwrap_err()
             .contains("source input changed")
     );
@@ -95,7 +95,7 @@ fn changed_sources_catalogs_and_formats_reject_publication() {
     );
     assert!(
         store
-            .publish(&job, &modified, &[], None)
+            .publish(&prepared, &modified, &[])
             .unwrap_err()
             .contains("semantic inputs")
     );
@@ -107,7 +107,7 @@ fn changed_sources_catalogs_and_formats_reject_publication() {
         store.inspect(&changed_catalog).unwrap().status,
         Freshness::EntityCatalogInvalidated
     );
-    assert!(store.publish(&job, &changed_catalog, &[], None).is_err());
+    assert!(store.publish(&prepared, &changed_catalog, &[]).is_err());
     let mut incompatible = input.clone();
     incompatible.projection_format += 1;
     assert!(store.prepare(incompatible).is_err());
@@ -124,16 +124,16 @@ fn retains_distinct_semantic_bindings_for_ordered_scopes() {
     };
 
     let mut store = open(&root);
-    let first_job = store.prepare(first.clone()).unwrap();
-    store.publish(&first_job, &first, &facts(), None).unwrap();
+    let first_binding = store.prepare(first.clone()).unwrap();
+    store.publish(&first_binding, &first, &facts()).unwrap();
     assert_eq!(store.inspect(&first).unwrap().status, Freshness::Fresh);
     assert_eq!(
         store.inspect(&second).unwrap().status,
         Freshness::EntityCatalogInvalidated
     );
 
-    let second_job = store.prepare(second.clone()).unwrap();
-    store.publish(&second_job, &second, &[], None).unwrap();
+    let second_binding = store.prepare(second.clone()).unwrap();
+    store.publish(&second_binding, &second, &[]).unwrap();
     assert_eq!(store.inspect(&second).unwrap().status, Freshness::Fresh);
     assert_eq!(store.inspect(&second).unwrap().assertions, vec![]);
     assert_eq!(store.inspect(&first).unwrap().status, Freshness::Fresh);
@@ -153,17 +153,17 @@ fn failed_index_publication_remains_incomplete_in_memory_and_after_reopen() {
     let input = binding(&root, "a");
     let mut store = open(&root);
     let first = store.prepare(input.clone()).unwrap();
-    store.publish(&first, &input, &facts(), None).unwrap();
+    store.publish(&first, &input, &facts()).unwrap();
     let second = store.prepare(input.clone()).unwrap();
     let obstruction = root.0.join(".sigil/worlds/index.json.tmp");
     std::fs::create_dir(&obstruction).unwrap();
-    assert!(store.publish(&second, &input, &[], None).is_err());
+    assert!(store.publish(&second, &input, &[]).is_err());
     assert_eq!(store.inspect(&input).unwrap().status, Freshness::Incomplete);
     drop(store);
     let mut store = open(&root);
     assert_eq!(store.inspect(&input).unwrap().status, Freshness::Incomplete);
     std::fs::remove_dir(obstruction).unwrap();
-    store.publish(&second, &input, &[], None).unwrap();
+    store.publish(&second, &input, &[]).unwrap();
     assert_eq!(store.inspect(&input).unwrap().status, Freshness::Fresh);
 }
 
@@ -178,8 +178,8 @@ fn only_matching_indexed_restricted_assertions_contribute_facts() {
     );
     let mut store = open(&root);
     assert_eq!(store.inspect(&input).unwrap().status, Freshness::Missing);
-    let job = store.prepare(input.clone()).unwrap();
-    store.publish(&job, &input, &facts(), None).unwrap();
+    let prepared = store.prepare(input.clone()).unwrap();
+    store.publish(&prepared, &input, &facts()).unwrap();
     root.write(
         ".sigil/worlds/implementation/a.egg",
         b"(panic \"never execute\")",
@@ -216,10 +216,10 @@ fn limits_and_invalid_paths_fail_before_index_acceptance() {
         ..StoreLimits::default()
     };
     let mut store = LockedStore::open(&root.0, limits).unwrap();
-    let job = store.prepare(input.clone()).unwrap();
+    let prepared = store.prepare(input.clone()).unwrap();
     assert!(
         store
-            .publish(&job, &input, &[], None)
+            .publish(&prepared, &input, &[])
             .unwrap_err()
             .contains("index exceeds")
     );
@@ -229,14 +229,14 @@ fn limits_and_invalid_paths_fail_before_index_acceptance() {
     invalid.source.path = "../escape".into();
     assert!(store.prepare(invalid).is_err());
     for pointer in ["", "/binding", "/binding/semantic"] {
-        let mut value = serde_json::to_value(&job).unwrap();
+        let mut value = serde_json::to_value(&prepared).unwrap();
         value
             .pointer_mut(pointer)
             .unwrap()
             .as_object_mut()
             .unwrap()
             .insert("producer".into(), serde_json::json!("forbidden"));
-        assert!(serde_json::from_value::<Job>(value).is_err());
+        assert!(serde_json::from_value::<PreparedBinding>(value).is_err());
     }
 }
 
@@ -252,9 +252,9 @@ fn symlinked_store_and_artifact_paths_are_rejected() {
     root.write("a", b"source");
     let input = binding(&root, "a");
     let mut store = open(&root);
-    let job = store.prepare(input.clone()).unwrap();
+    let prepared = store.prepare(input.clone()).unwrap();
     symlink(&outside.0, root.0.join(".sigil/worlds/implementation")).unwrap();
-    assert!(store.publish(&job, &input, &facts(), None).is_err());
+    assert!(store.publish(&prepared, &input, &facts()).is_err());
     assert!(!outside.0.join("a.egg").exists());
 }
 
@@ -265,16 +265,16 @@ fn cache_deletion_cannot_make_an_old_generation_current_again() {
     let input = binding(&root, "a");
     let mut store = open(&root);
     let first = store.prepare(input.clone()).unwrap();
-    store.publish(&first, &input, &facts(), None).unwrap();
+    store.publish(&first, &input, &facts()).unwrap();
     let old = store.prepare(input.clone()).unwrap();
     drop(store);
     std::fs::remove_dir_all(root.0.join(".sigil/worlds")).unwrap();
     let mut store = open(&root);
     let rebuilt = store.prepare(input.clone()).unwrap();
-    store.publish(&rebuilt, &input, &[], None).unwrap();
+    store.publish(&rebuilt, &input, &[]).unwrap();
     assert!(
         store
-            .publish(&old, &input, &facts(), None)
+            .publish(&old, &input, &facts())
             .unwrap_err()
             .contains("generation")
     );
@@ -286,7 +286,7 @@ fn cleanup_recovers_corrupt_indexes_and_preserves_sources_and_the_writer_lock() 
     let root = Workspace::new();
     root.write("a", b"source");
     root.write(".sigil/config.json", b"preserve");
-    root.write("job/job.json", b"external input");
+    root.write("binding/binding.json", b"external input");
     let store = open(&root);
     root.write(".sigil/worlds/index.json", b"corrupt index");
     root.write(".sigil/worlds/design/a.egg", b"corrupt assertion");
@@ -299,7 +299,7 @@ fn cleanup_recovers_corrupt_indexes_and_preserves_sources_and_the_writer_lock() 
         vec![".sigil/worlds/design", ".sigil/worlds/index.json"]
     );
     assert!(root.0.join(".sigil/worlds/.lock").is_file());
-    for path in ["a", ".sigil/config.json", "job/job.json"] {
+    for path in ["a", ".sigil/config.json", "binding/binding.json"] {
         assert!(root.0.join(path).is_file());
     }
     assert!(open(&root).entries().is_empty());

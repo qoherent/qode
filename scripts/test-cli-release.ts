@@ -95,64 +95,6 @@ try {
       implementation: { paths: ["main.any"] },
     }),
   );
-  const requestPath = join(scratch, "request.json");
-  await Deno.writeTextFile(
-    requestPath,
-    JSON.stringify({
-      version: 1,
-      id: "release-request",
-      items: [
-        {
-          id: "first",
-          scope: {
-            version: 1,
-            design: { paths: ["main.sigil"] },
-            implementation: { paths: ["main.any"] },
-          },
-        },
-        {
-          id: "second",
-          after: ["first"],
-          scope: {
-            version: 1,
-            design: { paths: ["main.sigil"] },
-            implementation: { paths: ["main.any"] },
-          },
-        },
-      ],
-    }),
-  );
-  const request = JSON.parse(
-    await run(compiler, [
-      "request",
-      "create",
-      "--root",
-      fixture,
-      "--frontend",
-      frontendPath,
-      "--definition",
-      requestPath,
-    ]),
-  );
-  assertEquals(
-    request.request.items.map((item: { state: string }) => item.state),
-    [
-      "ready",
-      "queued",
-    ],
-  );
-  const requestStatus = JSON.parse(
-    await run(compiler, [
-      "request",
-      "status",
-      "--root",
-      fixture,
-    ]),
-  );
-  assertEquals(
-    requestStatus.request.items.map((item: { state: string }) => item.state),
-    ["ready", "queued"],
-  );
   const native = async (args: string[], code = 0) => {
     return JSON.parse(
       await run(compiler, [
@@ -175,14 +117,14 @@ try {
   const turtle = join(scratch, "facts.ttl");
   const publish = async (side: string, text: string, label: string) => {
     const source = side === "design" ? "main.sigil" : "main.any";
-    const job = join(scratch, label);
+    const bindingDir = join(scratch, label);
     const prepared = await native([
       "prepare",
       side,
       "--source",
       source,
       "--out",
-      job,
+      bindingDir,
     ]);
     if (side === "implementation") assertEquals(prepared.inputs.length, 3);
     await Deno.writeTextFile(turtle, text);
@@ -191,8 +133,8 @@ try {
       side,
       "--source",
       source,
-      "--job",
-      join(job, "job.json"),
+      "--binding",
+      join(bindingDir, "binding.json"),
       "--turtle",
       turtle,
     ]);
@@ -214,12 +156,12 @@ try {
   await publish(
     "design",
     prefix + positive + `\n${entity} s:provides ${entity} .`,
-    "positive design job",
+    "positive design binding",
   );
   await publish(
     "implementation",
     prefix + `${entity} s:provides ${entity} .`,
-    "closed implementation job",
+    "closed implementation binding",
   );
   const closed = await native(["compile", "implementation"]);
   assertEquals(
@@ -227,7 +169,7 @@ try {
     "Closed",
     JSON.stringify(closed.diagnostics),
   );
-  await publish("design", prefix + negative, "design job");
+  await publish("design", prefix + negative, "design binding");
   await native(["stale", "design"]);
   assertEquals((await native(["compile", "design"])).world.state, "Coherent");
   assertEquals((await native(["entities"])).status, "authoritative");
@@ -238,7 +180,7 @@ try {
   await publish(
     "implementation",
     prefix + `${entity} s:uses ${entity} .`,
-    "implementation job",
+    "implementation binding",
   );
   assertEquals(
     (await native(["compile", "implementation"], 1)).comparison.implementation,
@@ -247,21 +189,21 @@ try {
   await publish(
     "design",
     prefix + `${entity} s:uses ${entity}; s:excludes ${entity} .`,
-    "contradiction job",
+    "contradiction binding",
   );
   assertEquals(
     (await native(["compile", "design"], 1)).world.state,
     "Disjoint",
   );
-  await publish("design", prefix + negative, "restored design job");
-  const staleJob = join(scratch, "stale job");
+  await publish("design", prefix + negative, "restored design binding");
+  const staleBinding = join(scratch, "stale binding");
   await native([
     "prepare",
     "implementation",
     "--source",
     "main.any",
     "--out",
-    staleJob,
+    staleBinding,
   ]);
   await Deno.writeTextFile(
     join(fixture, "main.any"),
@@ -273,8 +215,8 @@ try {
     "implementation",
     "--source",
     "main.any",
-    "--job",
-    join(staleJob, "job.json"),
+    "--binding",
+    join(staleBinding, "binding.json"),
     "--turtle",
     turtle,
     "--root",

@@ -1,4 +1,4 @@
-//! Ordered focus and effective world membership, without task execution.
+//! Ordered focus and effective world membership, without external scheduling.
 use crate::{
     frontend::{DesignInput, normalized_path},
     sources::{self, Selection, SourceManifest},

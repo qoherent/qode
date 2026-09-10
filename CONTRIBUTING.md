@@ -276,9 +276,9 @@ ingestion, catalogs and Design/Implementation gates. The language CLI does not
 invoke the native compiler or a model on the caller's behalf.
 
 Use the [native skill protocol](integrations/skills/sigil/references/compilation-execution.md)
-for exact commands. External workers reconstruct each source from prepared inputs;
-Implementation workers receive only source bytes, fixed ontology and identity
-catalog. Keep Design prose, neighboring code and job descriptors out of those
+for exact commands. External interpreters reconstruct each source from prepared inputs;
+Implementation interpreters receive only source bytes, fixed ontology and identity
+catalog. Keep Design prose, neighboring code and binding files out of those
 inputs. The external host owns scheduling, isolation, source edits and iteration.
 
 Generated `.sigil/worlds/` is ignored and disposable. Current native reports own

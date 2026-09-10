@@ -12,8 +12,8 @@ README, nor an alternate design retained here for implementation to choose from.
 
 The remaining gap is between that target and the existing implementation:
 `packages/sigilc/`, the structural frontend in `packages/core/`, their governing
-contracts, and the current command/skill workflow. No eqval Rust library is
-implemented in this folder yet.
+contracts, and the semantic calculation boundary. The compiler protocol cleanup
+is complete; no eqval Rust library is implemented in this folder yet.
 
 This audit is based on the source inspection that motivated the refactor,
 including executable code in `repos/egglog/`, `repos/snapdir/`, and Sigil's
@@ -361,8 +361,8 @@ code. Canonical language clarifications govern over narrower old specifications.
 | [sources](../sigilc/src/sources.rs), [inputs](../sigilc/src/inputs.rs), [store](../sigilc/src/store.rs) | Exact capture/binding, path-aware membership, accepted-content/run identities, preserved generation/CAS safeguards, and typed last-known inspection. |
 | [Design assembly](../sigilc/src/design.rs), [Implementation assembly](../sigilc/src/implementation.rs), [scope](../sigilc/src/scope.rs) | Target/role isolation, public-input authority, disappearing required membership, and exclusion of stale/history inputs from current computation. |
 | [reports](../sigilc/src/report.rs) and comparison/report tests | Boundary-qualified results, joint witnesses, two-sided source support, explicit gaps, historical locations, and separately bounded presentation. |
-| [request module](../sigilc/src/request.rs), [CLI](../sigilc/src/cli.rs), store/report process fields | Remove compiler-owned requests, attempts, receipts, artifact evidence, and `--evidence`; introduce the prepared semantic binding handoff without losing publication correctness. |
-| [sigilc README](../sigilc/README.md), governing `packages/sigilc/*.sigil`, [repository Sigil skill](../../integrations/skills/sigil/SKILL.md), its references and evals | Switch command and authoring guidance with the implemented boundary. Keep external reconstruction independent and scope semantic, not scheduled work. |
+| [sigilc CLI](../sigilc/src/cli.rs), [store](../sigilc/src/store.rs), and reports | Completed: compiler-owned requests, attempts, receipts, artifact evidence, and `--evidence` are removed; `PreparedBinding` preserves publication correctness. |
+| [sigilc README](../sigilc/README.md), governing `packages/sigilc/*.sigil`, [repository Sigil skill](../../integrations/skills/sigil/SKILL.md), its references and evals | Completed: command and authoring guidance use the binding handoff, with external reconstruction independent and scope semantic rather than scheduled work. |
 | [Older language reference](../../spec/sigil-language.md), [language contract](../../spec/language.sigil), and relevant decisions | Reconcile narrower claims with [canonical language](../../language.md), including arbitrary Concepts per Component, native Facets, and public terms defined within Interface Facets. |
 | [sigilc dependencies](../sigilc/Cargo.toml), actual Egglog build source, and `vendor/snapdir-core` | Select compatible proof APIs, record actual runtime/build identities, and preserve the documented hashing/capture limits. No engine fork is presumed necessary. |
 
@@ -394,19 +394,19 @@ another proposal first.
    manifests, target membership, public-provider authority, accepted-content/run
    invalidation, generation-safe publication, and compatible historical impact.
    Fresh diagnostics must not depend on the existence of an old projection.
-6. **Switch the external protocol coherently.** Replace Job/job.json semantics
-   with PreparedBinding/binding.json; remove process/evidence/request state and
-   update CLI, authored contracts, docs, and repository-owned skill together.
-   Preserve scope, locking, source validation, restricted ingest, and atomic
-   cache publication. The existing workflow remains the description of the
-   existing compiler until this implementation switch occurs.
+6. **Switch the external protocol coherently.** Completed in the current
+   implementation: `PreparedBinding/binding.json` replaced Job/job.json;
+   process, evidence, and request state were removed from sigilc; CLI,
+   contracts, docs, validators, and the repository-owned skill were updated.
+   Scope, locking, source validation, restricted ingest, and atomic cache
+   publication remain intact.
 7. **Extend only with a concrete comparison.** Add supported callee composition,
    Case/test expectation comparison with production roles intact, and then
    broader value/state/protocol theories. PreparedBinding safety requires its
    actual ordering, failure, and concurrency model, not just three guards.
 
-Stages 1-5 are the first useful implementation slice. Protocol cleanup can be
-coordinated with it but cannot substitute for stages 3-4. Retain tests for
+Stages 1-5 are the remaining eqval implementation slice. Protocol cleanup is
+complete and cannot substitute for stages 3-4. Retain tests for
 source capture, binding freshness, CAS publication, scope, graph separation,
 restricted ingest, contradiction precedence, and limits. Replace tests whose
 only purpose is preserving the old matcher or process schema.

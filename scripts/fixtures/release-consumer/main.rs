@@ -2,7 +2,7 @@
 //!
 //! The build workflow compiles this file on the matching target runner and
 //! uploads only the resulting executable, the tested archive, and the small
-//! fixture directory. The consumer job does not check out the repository or
+//! fixture directory. The consumer process does not check out the repository or
 //! invoke Deno, Node, npm, Cargo, or a compiler from the host PATH.
 
 use std::env;

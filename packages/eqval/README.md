@@ -196,11 +196,11 @@ projection publication, scope, comparison, and impact. The eqval owns the
 calculation. External callers own models, workers, prompts, attempts, retries,
 tests, and scheduling.
 
-The target handoff is `prepare` with copied semantic inputs and an immutable
-`binding.json`, followed by `ingest --binding binding.json`. These are proposed
-interfaces, not a claim that the current CLI already supports them. Retain
-source validation, generation checks, locking, and atomic cache publication;
-remove request ledgers, worker receipts, artifact evidence, and `--evidence`.
+The implemented handoff is `prepare` with copied semantic inputs and an
+immutable `binding.json`, followed by `ingest --binding binding.json`. Retain
+source validation, generation checks, locking, and atomic cache publication.
+The compiler does not retain request ledgers, worker receipts, artifact
+evidence, or process state.
 
 Scope stays because it defines semantic membership and implementation targets,
 not task order. The generated world store stays disposable. Changes to the

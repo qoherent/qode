@@ -44,8 +44,8 @@ fn publish(root: &Workspace, out: &str, turtle: &str) {
             "design",
             "--source",
             "a.sigil",
-            "--job",
-            &format!("{out}/job.json"),
+            "--binding",
+            &format!("{out}/binding.json"),
             "--turtle",
             "facts.ttl",
         ],
@@ -130,11 +130,11 @@ fn design_cli_distinguishes_missing_empty_interpreted_and_disjoint_worlds() {
 }
 
 #[test]
-fn design_cli_rejects_stale_jobs_and_unbound_or_foreign_identity() {
+fn design_cli_rejects_stale_bindings_and_unbound_or_foreign_identity() {
     let root = workspace();
     result(
         &root,
-        &["prepare", "design", "--source", "a.sigil", "--out", "job"],
+        &["prepare", "design", "--source", "a.sigil", "--out", "binding"],
         0,
     );
     root.write(
@@ -148,8 +148,8 @@ fn design_cli_rejects_stale_jobs_and_unbound_or_foreign_identity() {
             "design",
             "--source",
             "a.sigil",
-            "--job",
-            "job/job.json",
+            "--binding",
+            "binding/binding.json",
             "--turtle",
             "facts.ttl",
         ],
@@ -168,8 +168,8 @@ fn design_cli_rejects_stale_jobs_and_unbound_or_foreign_identity() {
             "design",
             "--source",
             "a.sigil",
-            "--job",
-            "job/job.json",
+            "--binding",
+            "binding/binding.json",
             "--turtle",
             "facts.ttl",
         ],
@@ -191,8 +191,8 @@ fn design_cli_rejects_stale_jobs_and_unbound_or_foreign_identity() {
             "design",
             "--source",
             "a.sigil",
-            "--job",
-            "job/job.json",
+            "--binding",
+            "binding/binding.json",
             "--turtle",
             "facts.ttl",
         ],
@@ -211,8 +211,8 @@ fn design_cli_rejects_stale_jobs_and_unbound_or_foreign_identity() {
             "design",
             "--source",
             "a.sigil",
-            "--job",
-            "job/job.json",
+            "--binding",
+            "binding/binding.json",
             "--turtle",
             "facts.ttl",
         ],
@@ -233,8 +233,8 @@ fn design_cli_rejects_stale_jobs_and_unbound_or_foreign_identity() {
             "design",
             "--source",
             "a.sigil",
-            "--job",
-            "job/job.json",
+            "--binding",
+            "binding/binding.json",
             "--turtle",
             "facts.ttl",
         ],
@@ -258,8 +258,8 @@ fn design_cli_rejects_stale_jobs_and_unbound_or_foreign_identity() {
             "design",
             "--source",
             "a.sigil",
-            "--job",
-            "job/job.json",
+            "--binding",
+            "binding/binding.json",
             "--turtle",
             "facts.ttl",
         ],
@@ -280,8 +280,8 @@ fn design_cli_rejects_stale_jobs_and_unbound_or_foreign_identity() {
             "design",
             "--source",
             "a.sigil",
-            "--job",
-            "job/job.json",
+            "--binding",
+            "binding/binding.json",
             "--turtle",
             "facts.ttl",
         ],
@@ -299,8 +299,8 @@ fn design_cli_rejects_stale_jobs_and_unbound_or_foreign_identity() {
             "design",
             "--source",
             "a.sigil",
-            "--job",
-            "job/job.json",
+            "--binding",
+            "binding/binding.json",
             "--turtle",
             "facts.ttl",
         ],
@@ -322,8 +322,8 @@ fn design_cli_rejects_stale_jobs_and_unbound_or_foreign_identity() {
             "design",
             "--source",
             "a.sigil",
-            "--job",
-            "job/job.json",
+            "--binding",
+            "binding/binding.json",
             "--turtle",
             "facts.ttl",
         ],
@@ -344,8 +344,8 @@ fn design_cli_rejects_stale_jobs_and_unbound_or_foreign_identity() {
             "design",
             "--source",
             "a.sigil",
-            "--job",
-            "job/job.json",
+            "--binding",
+            "binding/binding.json",
             "--turtle",
             "facts.ttl",
         ],
@@ -354,160 +354,6 @@ fn design_cli_rejects_stale_jobs_and_unbound_or_foreign_identity() {
     let stale_stderr = String::from_utf8_lossy(&stale.stderr);
     assert!(stale_stderr.contains("frontend source changed"));
     assert!(stale_stderr.contains("recapture the structural Design export"));
-}
-
-#[test]
-fn accepted_ingest_persists_and_reports_external_artifact_links() {
-    let root = workspace();
-    result(
-        &root,
-        &["prepare", "design", "--source", "a.sigil", "--out", "job"],
-        0,
-    );
-    root.write("facts.ttl", b"");
-    root.write(
-        "evidence.json",
-        br#"{
-          "version": 1,
-          "preparation": "job",
-          "job": "job/job.json",
-          "worker": "worker/process.json",
-          "ingest": "sigilc ingest design --job job/job.json --turtle facts.ttl",
-          "result": "attempt-1.stdout",
-          "attempts": [
-            {"turtle": "facts.ttl", "result": "attempt-1.stdout", "exit": null}
-          ]
-        }"#,
-    );
-    let rejected = run(
-        &root,
-        &[
-            "ingest",
-            "design",
-            "--source",
-            "a.sigil",
-            "--job",
-            "job/job.json",
-            "--turtle",
-            "facts.ttl",
-            "--evidence",
-            "evidence.json",
-        ],
-    );
-    assert_eq!(rejected.status.code(), Some(3));
-    assert!(
-        String::from_utf8_lossy(&rejected.stderr).contains("start from prepare's evidence.json")
-    );
-    root.write(
-        "evidence.json",
-        br#"{
-          "version": 1,
-          "preparation": "job",
-          "job": "job/job.json",
-          "worker": "worker/process.json",
-          "ingest": "sigilc ingest design --job job/job.json --turtle facts.ttl",
-          "attempts": [
-            {"turtle": "facts.ttl", "result": "attempt-1.stdout", "exit": 0}
-          ]
-        }"#,
-    );
-    let rejected = run(
-        &root,
-        &[
-            "ingest",
-            "design",
-            "--source",
-            "a.sigil",
-            "--job",
-            "job/job.json",
-            "--turtle",
-            "facts.ttl",
-            "--evidence",
-            "evidence.json",
-        ],
-    );
-    assert_eq!(rejected.status.code(), Some(3));
-    assert!(String::from_utf8_lossy(&rejected.stderr).contains("exit null"));
-    root.write(
-        "evidence.json",
-        br#"{
-          "version": 1,
-          "preparation": "job",
-          "job": "job/job.json",
-          "worker": "worker/process.json",
-          "ingest": "sigilc ingest design --job job/job.json --turtle facts.ttl",
-          "attempts": [
-            {"turtle": "attempt-1.ttl", "result": "attempt-1.stderr", "exit": 3},
-            {"turtle": "facts.ttl", "result": "attempt-2.stdout", "exit": null}
-          ]
-        }"#,
-    );
-    let accepted = result(
-        &root,
-        &[
-            "ingest",
-            "design",
-            "--source",
-            "a.sigil",
-            "--job",
-            "job/job.json",
-            "--turtle",
-            "facts.ttl",
-            "--evidence",
-            "evidence.json",
-        ],
-        0,
-    );
-    assert_eq!(accepted["artifact"]["complete"], true);
-    assert_eq!(accepted["artifact"]["version"], 1);
-    assert_eq!(
-        accepted["artifact"]["attempts"].as_array().unwrap().len(),
-        2
-    );
-    assert_eq!(accepted["artifact"]["attempts"][0]["exit"], 3);
-    assert_eq!(accepted["artifact"]["attempts"][1]["exit"], 0);
-    assert_eq!(
-        accepted["artifact"]["projection"],
-        ".sigil/worlds/design/a.sigil.egg"
-    );
-
-    let index: Value =
-        serde_json::from_slice(&std::fs::read(root.0.join(".sigil/worlds/index.json")).unwrap())
-            .unwrap();
-    assert_eq!(
-        index["entries"]["design/a.sigil"]["artifact"],
-        accepted["artifact"]
-    );
-    let report = result(&root, &["compile", "design"], 0);
-    assert_eq!(report["artifacts"]["a.sigil"]["complete"], true);
-    let input_fingerprint = report["input_fingerprint"].as_str().unwrap();
-    assert_eq!(
-        report["artifact_report"],
-        format!("sigil://expanded-world/design/{input_fingerprint}")
-    );
-    assert_eq!(
-        report["artifacts"]["a.sigil"]["generation"],
-        accepted["generation"]
-    );
-}
-
-#[test]
-fn fresh_legacy_projection_is_explicitly_incomplete_in_artifact_report() {
-    let root = workspace();
-    publish(&root, "job", "");
-    let index_path = root.0.join(".sigil/worlds/index.json");
-    let mut index: Value = serde_json::from_slice(&std::fs::read(&index_path).unwrap()).unwrap();
-    index["entries"]["design/a.sigil"]
-        .as_object_mut()
-        .unwrap()
-        .remove("artifact");
-    root.write(
-        ".sigil/worlds/index.json",
-        &serde_json::to_vec(&index).unwrap(),
-    );
-
-    let report = result(&root, &["compile", "design"], 0);
-    assert!(report["artifacts"]["a.sigil"].is_null());
 }
 
 #[test]
@@ -523,23 +369,19 @@ fn preparation_omits_unbound_design_files_and_never_overwrites_a_directory() {
     root.write("frontend.json", &serde_json::to_vec(&input).unwrap());
     result(
         &root,
-        &["prepare", "design", "--source", "a.sigil", "--out", "job"],
+        &["prepare", "design", "--source", "a.sigil", "--out", "binding"],
         0,
     );
-    let prepared = std::fs::read_to_string(root.0.join("job/design.json")).unwrap();
+    let prepared = std::fs::read_to_string(root.0.join("binding/design.json")).unwrap();
     assert!(!prepared.contains("secret"));
     assert!(!prepared.contains("unrelated.sigil"));
-    assert!(root.0.join("job/job.json").is_file());
-    assert!(root.0.join("job/ontology.json").is_file());
-    let evidence: Value =
-        serde_json::from_slice(&std::fs::read(root.0.join("job/evidence.json")).unwrap()).unwrap();
-    assert_eq!(evidence["version"], 1);
-    assert_eq!(evidence["job"], "job/job.json");
-    assert!(evidence["attempts"][0]["exit"].is_null());
+    assert!(root.0.join("binding/binding.json").is_file());
+    assert!(root.0.join("binding/ontology.json").is_file());
+    assert!(!root.0.join("binding/evidence.json").exists());
     assert_eq!(
         run(
             &root,
-            &["prepare", "design", "--source", "a.sigil", "--out", "job"]
+            &["prepare", "design", "--source", "a.sigil", "--out", "binding"]
         )
         .status
         .code(),
@@ -573,7 +415,7 @@ fn empty_scope_and_runtime_limits_never_fabricate_success() {
 #[test]
 fn deleted_index_entries_are_reported_and_never_assembled() {
     let root = workspace();
-    publish(&root, "job", "");
+    publish(&root, "binding", "");
     std::fs::remove_file(root.0.join("a.sigil")).unwrap();
     root.write(
         "frontend.json",

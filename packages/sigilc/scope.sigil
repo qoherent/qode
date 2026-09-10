@@ -1,7 +1,7 @@
 component SigilComparisonScope {
   goal {
     Focus native Design and Implementation comparison on explicit source
-    membership so external workflows can remove temporary scope assembly.
+    membership so callers do not need duplicate scope assembly.
   }
 
   interface {
@@ -19,14 +19,14 @@ component SigilComparisonScope {
     FocusOrder {
       Preserve the caller's explicit root order as focus priority. Do not sort
       it away during normalization or replace it with filesystem discovery order.
-      Return that order from scoped commands so the frontend and external loop
+      Return that order from scoped commands so the frontend and caller
       can see what to address first and next without a temporary priority table.
       Report dependency additions deterministically after the requested roots,
       retaining their inclusion reasons without displacing explicit priorities.
       Identify requested order separately from unordered effective membership.
       Reprioritization changes order identity, not unchanged semantic bindings.
-      Order guides external work; sigilc does not schedule workers, execute coding
-      tasks or infer that an earlier entry has been completed.
+      Order guides caller priority; sigilc does not schedule interpretation or
+      infer that an earlier entry has been completed.
     }
 
     DesignMembership {
@@ -41,7 +41,7 @@ component SigilComparisonScope {
       Do not silently drop unresolved references or errors. When unresolved
       imports require conservative full-bundle membership, report that widening.
       Preserve applicable configuration, glossary context and global diagnostics.
-      Do not infer source membership from temporary prose or task metadata.
+      Do not infer source membership from temporary prose or caller metadata.
     }
 
     ScopedComparison {
@@ -67,18 +67,10 @@ expand SigilComparisonScope {
       Reuse a projection when its existing complete semantic binding is unchanged.
       A changed effective Design identity catalog still invalidates Implementation
       projections under the existing full-catalog binding policy.
-      Scoping never gives Implementation workers Design prose or relationships;
+      Scoping never gives Implementation interpreters Design prose or relationships;
       their inputs remain captured source, fixed ontology and identity catalog.
     }
 
-    WorkflowBoundary {
-      A focused comparison reports only its effective source membership.
-      It does not establish delivery of the whole refactor, test completion or
-      code removal. Keep final whole-scope delivery checks external.
-      Implement scope resolution in sigilc. Do not preserve the TypeScript
-      compiler package, introduce a wrapper or migrate temporary task tables
-      into a compiler-owned planning framework.
-    }
   }
 
   cases {
@@ -100,154 +92,23 @@ expand SigilComparisonScope {
     }
 
     ObservedPriority {
-      In the refactor loop, scope implementation had to be placed before export
-      extraction and legacy deletion. Making that order explicit in the temporary
-      Todo list exposed a requirement through real use: unordered membership
-      could name the same work but could not communicate what comes first.
-      Treat this as learning by observation: a necessary fact supplied by the
-      temporary loop becomes a native requirement, then is implemented, exercised
-      on the original task and adopted before duplicate bookkeeping is removed.
-      This observation motivates FocusOrder; use native output on subsequent
-      work and retire duplicate focus-priority bookkeeping once it supplies the
-      same information. Preserve equivalent caller-defined
-      priority in native scope output so a resumed external loop can recover it.
+      Preserve caller-defined priority in native scope output so callers can
+      address selected roots in the reported order without maintaining a second
+      focus-priority table.
       Selecting roots A then B reports A first. Reprioritizing B then A reports
       B first without invalidating otherwise identical per-source projections.
       Repeated runs preserve order even when frontend or filesystem enumeration
-      changes. The external workflow still establishes which work is complete.
+      changes. The caller still establishes which interpretation is complete.
 
       Focus order is a priority and reporting order, not a demand to serialize
-      independent reconstructions. After one stale report, a coding agent may
-      prepare and spawn bounded concurrent subagents for independent nonfresh
-      sources in one released item. Native publication stays authoritative and
-      the next ordered item still waits for the predecessor's full terminal
-      gate. This was observed when serial source turns dominated a real
-      reconstruction cycle even though native commands were fast.
+      independent reconstructions. External callers may prepare independent
+      sources concurrently while native publication remains authoritative.
     }
 
     ScopeLimits {
       A typo in a root fails instead of producing an empty green result.
       A successful focused comparison is not reported as complete-refactor
       convergence. Gate exits retain their subcommand-specific named states.
-    }
-  }
-}
-
-component SigilScopedRequest {
-  goal {
-    Persist one ordered implementation request and its evidence-backed
-    lifecycle so the external convergence loop can retire duplicate delivery
-    queue state without moving worker orchestration into sigilc.
-  }
-
-  interface {
-    RequestDefinition {
-      Accept a versioned request identity and a nonempty ordered list of named
-      scope items. A request and each item may carry one bounded human-readable
-      goal that explains intent without affecting release or semantic authority.
-      Each item contains an existing ScopeInput and may name explicit predecessor
-      item IDs. Preserve the immutable request definition,
-      requested order, effective membership and both scope fingerprints. A native
-      reordering operation accepts every item ID exactly once, preserves each
-      item's scope, evidence and predecessors, validates the resulting order,
-      updates the request fingerprint and clears completion evidence. Reject
-      duplicate IDs, unknown predecessors, cycles, duplicate scope roots and
-      conflicting selectors. Order is priority among released items; it is not
-      an implicit dependency. A request that wants items two and three held
-      until item one finishes must name item one as their predecessor.
-    }
-
-    RequestLifecycle {
-      Keep request state in durable generated workflow state separate from the
-      disposable .sigil/worlds projection index. A new item is `ready` when all
-      predecessors are terminal and `queued` otherwise. Re-evaluate each
-      released item against the same scoped stale and gate inputs. Record the
-      native named terminal state `Closed` or `Converged` only when the selected
-      Design is valid, every selected projection is fresh, and the current
-      scoped Implementation gate returns exit zero. Preserve `Drift` for exit
-      one and `unavailable` for exit three without converting either to a
-      successful completion. A changed source, catalog, scope fingerprint or
-      stale projection reopens a prior terminal item with its current reason.
-      Persist transitions atomically and retain the current native report
-      identity and external delivery/check evidence references.
-    }
-
-    RequestInspection {
-      Expose create, status, terminal completion-record and advance-equivalent
-      native operations that can
-      recover the request, current item states, released order, predecessor
-      reasons, scope/input identities, native gate names and supporting evidence
-      after a process or session restart. Status may update derived readiness,
-      but no command may accept a hand-written `done` flag or infer completion
-      from order, a task title, a model claim, a fixture or an empty world.
-      External callers still choose workers, run coding and ordinary checks,
-      and decide when to invoke the commands; sigilc only validates and records
-      the deterministic state transition.
-
-      A completion record is accepted only after every item is natively Closed
-      or Converged. It retains bounded opaque references to native reports,
-      projection artifacts, delivery, deletion, checks, warnings, explicit user
-      overrides and bounded human-readable outcome summaries together with the
-      request fingerprint and terminal gate
-      snapshots. It is not a hand-written done flag: a status refresh clears it
-      whenever inputs or the native lifecycle reopen any item.
-
-      Creating a request retains its bounded structural frontend capture under
-      the generated workflow record. Default inspection reuses that immutable
-      capture after disposable run artifacts are removed; an explicit newer
-      frontend input may reopen the lifecycle. Do not make restart recovery
-      depend on a temporary tracker or caller-owned export path.
-    }
-
-    RequestArchive {
-      Archive the current immutable native request under its definition
-      fingerprint before a different request replaces the single active slot.
-      Preserve the full request, external evidence references and terminal
-      states in generated workflow history. Do not require hand-editing,
-      deleting, or copying request state into a temporary tracker.
-    }
-  }
-}
-
-expand SigilScopedRequest {
-  constraints {
-    RequestBoundary {
-      This is a bounded scope-request ledger, not a generic task ontology,
-      worker registry, job database, daemon, scheduler, retry loop, receipt
-      system or compatibility adapter. Goals and outcomes are bounded context,
-      not commands, semantic facts, or completion authority. Preparation jobs remain immutable
-      source descriptors and projection publication remains disposable.
-      Request state never enters Design or Implementation assertions and never
-      changes world authority. External delivery, tests and product approval
-      remain separately evidenced, while their references may be attached to
-      the request for parity inspection.
-    }
-  }
-
-  cases {
-    OrderedRelease {
-      A request with items one, two and three may place one first in order and
-      list one as the predecessor of both two and three. Initially one is
-      `ready` and two and three are `queued`. A current scoped `Closed` or
-      `Converged` result for one atomically releases two and three in their
-      requested order. A `Drift`, unavailable comparison or stale projection
-      leaves both queued and preserves the named reason.
-    }
-
-    ScopeIdentityChange {
-      Reordering released items changes priority but not unchanged per-source
-      bindings. Changing effective membership, Design catalog identity,
-      Implementation selection or captured source bytes invalidates affected
-      terminal state and prevents dependent release until a fresh current gate
-      is observed. Restarting the process recovers the same request and states.
-    }
-
-    EvidenceParity {
-      A status report identifies the exact scope definition, order and
-      membership fingerprints, current source/projection identities, native
-      Design and Implementation states, warnings or unavailable reasons, and
-      external check/deletion evidence references. It never claims that a
-      semantic gate alone proves code delivery or removal.
     }
   }
 }

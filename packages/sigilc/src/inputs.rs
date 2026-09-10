@@ -82,7 +82,7 @@ impl DesignSnapshot {
         &self.input
     }
 
-    /// Everything supplied to a Design worker is covered by this source's key.
+    /// Everything supplied to a Design interpreter is covered by this source's key.
     pub fn preparation(&self, source: &str) -> Result<serde_json::Value, String> {
         let binding = self.binding(source)?;
         let SemanticInput::Design { dependencies, .. } = &binding.semantic else {

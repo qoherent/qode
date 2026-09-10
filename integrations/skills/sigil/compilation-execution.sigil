@@ -1,30 +1,29 @@
 @packages/cli import { SigilCli }
 @packages/sigilc import { SigilSemanticCompiler }
 @packages/sigilc/scope.sigil import { SigilComparisonScope }
-@packages/sigilc/scope.sigil import { SigilScopedRequest }
 
 component SigilCompilationExecution {
   goal {
-    Guide an external caller through existing language export and direct native
-    operations while preserving current input identity and independent workers.
+    Guide an external caller through language export and direct native semantic
+    operations while preserving input identity and independent interpretation.
   }
 
   interface {
     CompilationExecution {
       SigilCli exports the current structural Design bundle.
 
-      Call sigilc directly for scope, request create/status, stale, prepare, ingest,
-      entities, compile, compare and clean.
+      Call sigilc directly for scope, stale, prepare, ingest, entities, compile,
+      compare and clean.
 
-      SigilSemanticCompiler supplies native JSON paired with the actual process exit
-      and stderr.
+      SigilSemanticCompiler supplies native JSON paired with the actual process
+      exit and stderr.
 
-      Use one ordered SigilComparisonScope consistently across related operations. A
-      scope inspection reports focus and membership without asserting completion.
+      Use one ordered SigilComparisonScope consistently across related operations.
+      Scope reports semantic membership and caller priority without asserting a
+      comparison result.
 
-      Use SigilScopedRequest for an ordered set of scopes when later items wait on
-      explicit predecessors. Request status reports native lifecycle and external
-      evidence references; it does not run workers or prove delivery.
+      Prepare produces copied semantic inputs and an immutable binding.json.
+      An external interpreter returns Turtle to the matching ingest command.
     }
   }
 }
@@ -38,28 +37,14 @@ expand SigilCompilationExecution {
 
       Prepare into a new directory outside selected sources.
 
-      Retain job.json with the caller and return it unchanged with the worker's
-      Turtle for ingestion.
+      Design interpreters receive design.json and ontology.json.
 
-      The coding agent must spawn a subagent in the background for each source and
-      pass it the matching source, job.json, evidence-manifest path and sigilc
-      ingest tool parameters. The subagent invokes ingest against its temporary
-      Turtle with the prepared artifact-evidence template. The worker replaces its
-      placeholder references, records rejected attempts with numeric exits, and
-      leaves exactly one final submitted attempt with exit null; native records
-      exit zero only when it accepts. When the tool rejects, its exact error and
-      hint are returned to that subagent; it records the actual nonzero exit,
-      repairs only the temporary Turtle, appends a new pending attempt and invokes
-      ingest again until native exit zero
-      publishes, or preserves the concrete blocker. Record every process/job,
-      Turtle, tool result and exit. Never mutate source bytes, prepared JSON,
-      job.json or a published projection; recapture and start a fresh isolated
-      round when a bound input changes.
+      Implementation interpreters receive exactly captured source bytes,
+      ontology.json and catalog.json.
 
-      Design workers receive design.json and ontology.json.
-
-      Implementation workers receive exactly captured source bytes, ontology.json and
-      catalog.json.
+      Submit the returned Turtle with the unchanged matching binding.json. A
+      rejected submission may be repaired externally and retried with that
+      binding; changed inputs require a fresh preparation.
 
       Compile current Design, then use its available identity catalog to prepare
       independent Implementation projections and compare selected worlds.
@@ -69,39 +54,31 @@ expand SigilCompilationExecution {
       Resolve a reported prerequisite or invocation failure before retrying the
       affected operation.
 
-      Record every worker attempt, returned Turtle, matching ingest command and exit.
-      A source round closes only after the accepted exit-zero ingest publishes its
-      projection; preparation or a rejected attempt is not semanticization.
-
-      Native ingest errors include an actionable `hint:` for common identity,
-      ontology and stale-input failures. Preserve the original error and route its
-      hint to the coding agent's next temporary-construction repair; recapture and
-      prepare again when the hint reports changed inputs.
+      Native ingest errors include an actionable hint for common identity,
+      ontology and stale-input failures. Preserve the original error and use its
+      hint for the next temporary-construction repair.
     }
   }
 
   constraints {
     CompilationExecution {
-      Workers, isolation, retries, source edits and scheduling remain external.
+      Interpretation, isolation, retries, source edits and scheduling remain
+      external.
 
-      A rejection loop is part of the subagent prompt: the subagent repairs its
-      temporary construction from the exact ingest error/hint, records the
-      attempt and repeats the tool call with --evidence until exit zero or a
-      concrete blocker. It never edits source bytes, prepared JSON, caller-held
-      job.json or a published projection, and it never receives neighboring code
-      or unrelated caller state.
+      Never edit source bytes, binding.json or a published projection while
+      repairing a rejected Turtle result.
 
       Do not add a TypeScript wrapper, provider, stage or orchestration service.
 
-      Do not give Implementation workers Design prose, neighboring code, caller
-      descriptors or comparison feedback.
+      Do not give Implementation interpreters Design prose, neighboring code,
+      caller records or comparison feedback.
 
       Frozen identities are names, not proof.
 
       Design gates report Coherent or Loose with exit zero, Disjoint with exit one.
 
-      Implementation gates report Closed or Converged with exit zero, Drift with exit
-      one.
+      Implementation gates report Closed or Converged with exit zero, Drift with
+      exit one.
 
       Loose and Converged are yellow with warnings, not failed runs.
 
@@ -111,56 +88,34 @@ expand SigilCompilationExecution {
       Implementation and comparison remain unset.
 
       Scope exit zero is inspection only; stale exit one means freshness work,
-      entities exit one means unavailable catalog.
+      and entities exit one means an unavailable catalog.
 
       Do not infer a semantic color from a generic exit code.
 
       Generated worlds are ignored and disposable.
 
-      Scope order does not schedule tasks, prove delivery or invalidate otherwise
-      unchanged semantic bindings. A stale report or missing worker projection never
-      supplies completed proof.
-
-      Request state is one atomic generated ledger separate from .sigil/worlds.
-      Queued/ready release is predecessor-derived; only fresh native Closed or
-      Converged evidence is terminal. Do not duplicate its ordering/release state in
-      a temporary queue.
-
-      Do not advance the reconstruction task until index.json and every selected
-      Design and Implementation .egg are present and fresh, and the coding agent's
-      worker-spawn and matching ingest command/exit are recorded. A lock-only worlds
-      directory, preparation, fixture or hand-authored Turtle is not semanticization
-      evidence.
+      Scope order does not schedule external work, prove delivery, or invalidate
+      otherwise unchanged semantic bindings.
     }
   }
 
   cases {
     CompilationExecution {
-      Reordering roots preserves membership while native focus_order exposes the new
-      caller priority.
+      Reordering roots preserves membership while native focus_order exposes the
+      new caller priority.
 
-      Reuse that output instead of a second priority table. A changed source causes
-      stale ingestion rejection; recapture and reconstruct the affected input rather
-      than editing the descriptor to force acceptance.
+      Reuse that output instead of a second priority table. A changed source
+      causes stale ingestion rejection; recapture and reconstruct the affected
+      input rather than editing the binding to force acceptance.
 
       Missing Design reconstruction leaves comparison unavailable.
 
-      Missing published worlds or missing coding-agent worker/ingest interaction
-      keeps the request at the reconstruction gate; no later task or temporary
-      mechanism retirement is allowed.
+      A native ingest rejection returns the next actionable repair hint to the
+      external interpreter. It cannot turn rejection into acceptance by changing
+      source bytes, binding.json or hand-authored facts.
 
-      A native ingest rejection is returned as the next actionable repair prompt
-      inside the subagent tool loop. The subagent repeats worker -> ingest until
-      exit zero publishes or records an observed blocker; it cannot turn
-      rejection into acceptance by changing source bytes, prepared descriptors,
-      job.json or hand-authored facts.
-
-      Useful external implementation work may continue while that semantic
-      prerequisite is absent.
-
-      A three-item request may leave items two and three queued behind item one, then
-      release both in requested order after item one reaches a fresh native terminal
-      gate. Restart recovers the same request and lifecycle.
+      A source with no supported assertion may publish a truthful zero-fact
+      Turtle result.
     }
   }
 }

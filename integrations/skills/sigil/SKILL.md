@@ -61,74 +61,42 @@ structure or prove behavior. Use the selection examples in
 ## Use the native flow
 
 Read [compilation execution](references/compilation-execution.md) for the exact
-protocol, durable subagent prompt, ordered scope, per-source worker inputs and
-command-specific exits. This skill/reference is the model-facing source of the
-worker invocation; `compile.md` and `track.md` are temporary loop records and
-must not be required by the coding-agent workflow. The required action is to
-**spawn a subagent**; do not substitute a provider-specific or legacy launcher.
-Capture current authored input with `sigil export design .`; use that JSON with
-native `--frontend`. Refresh it after authored/config/glossary changes.
+semantic protocol, per-source inputs, and command exits. Capture current
+authored input with `sigil export design .`; use that JSON with native
+`--frontend`, and refresh it after authored, configuration, or glossary changes.
 
-At the start of an implementation request, run `sigilc request status --root .`.
-When an active request exists, its `ready` item is the authoritative work to
-run; use its persisted scope and frontend capture, and do not create or replace
-the request. `scope` means source selection within that item, not a task name.
-When no request exists, derive a scope from the authorized work before creating
-one.
-
-1. For an ordered multi-item request, create one native request definition with
-   the intended scopes and explicit `after` predecessor IDs. Run
-   `sigilc request status` before each external round; it is the source for
-   queued/ready release and current native gate state.
-2. Inspect `sigilc scope` and `sigilc stale` with the intended selection. Run
-   native `sigilc stale` before rebuilding any projection. Preserve every
-   `fresh` projection; reprepare and respawn a subagent only for rows reported
-   stale, missing or dependency-invalid. Freshness is binding-specific: an
-   accepted egg from a different ordered Design item may remain in the cache,
-   but native stale decides whether it is reusable for the current item.
-3. Prepare each stale Design source. The coding agent must spawn a subagent in
-   the background using the exact prompt and ingest-tool parameters in the
-   durable compilation reference. The subagent retains process/job evidence,
-   writes its temporary Turtle and prepared artifact-evidence manifest, and calls the
-   matching `sigilc ingest --evidence` tool itself. On a rejection, it reads the
-   exact native error and actionable hint, records its actual nonzero exit,
-   appends a pending attempt to the manifest and calls the tool again until
-   ingest exits 0 and publishes, or reports a concrete blocker. Never mutate
-   source bytes, prepared JSON, `job.json` or published projections. Reprepare
-   and start a fresh isolated round when a bound input changes. A preparation
-   without a real worker return, evidence manifest and matching accepted
-   `sigilc ingest` is not semanticization evidence.
+1. Inspect `sigilc scope` and `sigilc stale` with the intended selection.
+   Preserve every fresh projection and prepare only rows reported stale,
+   missing, or dependency-invalid. Scope is semantic membership and caller
+   priority; it is not task state.
+2. Prepare each stale Design source. `prepare` writes copied semantic inputs
+   and an immutable `binding.json`. An external caller may give those inputs to
+   an isolated interpreter and retain its own attempts and records.
+3. Submit the interpreter's Turtle with the matching
+   `sigilc ingest --binding binding.json` command. On rejection, the external
+   caller may repair its temporary Turtle and retry with the same binding. Never
+   mutate source bytes, the binding, or a published projection. Reprepare when
+   a bound input changes.
 4. Run `sigilc compile design` and inspect the named state and diagnostics.
    `sigilc entities` exports the current identity catalog when available.
-5. Prepare each selected Implementation source. Its independent subagent
-   receives exactly captured source bytes, fixed ontology and frozen catalog.
-   Keep Design prose, neighboring code, job descriptors and repair feedback out
-   of that worker's input. Run the same prompt-driven worker -> `sigilc ingest`
-   accept/reject loop: the subagent records every attempt in the evidence
-   manifest, repairs its temporary Turtle from the exact native error/hint and
-   invokes `sigilc ingest --evidence` again until exit 0 publishes the
-   projection. Reprepare and launch a fresh isolated round when a bound input
-   changes; never patch source, prepared JSON, descriptor or published output.
+5. Prepare and ingest each selected Implementation source. Its interpreter
+   receives exactly captured source bytes, fixed ontology, and frozen catalog.
+   Keep Design prose and neighboring code out of those inputs.
 6. Run `sigilc compile implementation` or `sigilc compare`. Preserve unavailable
    prerequisites and warnings. Reconstruct changed inputs before comparing
    again.
-7. Run `sigilc request status` again after ingestion and external checks. It
-   persists only native lifecycle/evidence references; workers, coding, tests,
-   review and deletion remain external.
 
-Do not advance the reconstruction task until the current scope has Design and
-Implementation `.egg` projections plus `index.json`, every selected row is
-fresh, and a real coding-agent run records the background worker spawn and each
-matching `sigilc ingest` command/exit. `.sigil/worlds/` containing only its
-lock, native preparation, fixtures, or hand-authored Turtle leaves this gate
-open.
+The external host decides how to schedule interpreters, retry them, and retain
+workflow records. `sigilc` only validates bindings and publishes accepted
+semantic projections. `.sigil/worlds/` containing only its lock, preparation,
+fixtures, or hand-authored Turtle does not establish a fresh semantic result.
 
 See [Design review](references/design-compilation-review.md) and
 [implementation design](references/implementation-design.md) for interpretation.
 These operations derive meaning from independently supplied assertions; passing
 fixtures, ownership comments or tests do not establish reconstruction fidelity.
-Delivery, tests, removals and full task completion need their own actual
-evidence.
+Delivery, tests, removals, and other product decisions remain outside the
+compiler and this semantic gate.
 
 Keep `.sigil/worlds/` ignored: it is disposable generated state. Keep
 preparation and report files outside selected source scope. Human decisions,

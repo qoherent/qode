@@ -5,7 +5,7 @@ use crate::{
     inputs::DesignSnapshot,
     eqval::{self, DesignState, DesignWorld, Limits},
     sources::hash,
-    store::{ArtifactEvidence, Freshness, LockedStore},
+    store::{Freshness, LockedStore},
     turtle::{Assertion, ONTOLOGY, Object, RDF_TYPE, XSD},
 };
 use serde::Serialize;
@@ -25,12 +25,8 @@ pub struct DesignReport {
     pub design_fingerprint: String,
     pub all_fresh: bool,
     pub intentional_empty: bool,
-    pub artifact_report: String,
     pub sources: Vec<SourceStatus>,
     pub assertion_sources: BTreeMap<String, Vec<String>>,
-    /// One entry for every fresh source. `null` means that its accepted
-    /// projection predates native artifact evidence and is therefore incomplete.
-    pub artifacts: BTreeMap<String, Option<ArtifactEvidence>>,
     pub diagnostics: crate::report::Diagnostics,
     pub world: DesignWorld,
     pub catalog: Option<FrozenCatalog>,
@@ -89,7 +85,6 @@ pub fn compile(
         return Err("structural Design input limit exceeded".into());
     }
     let mut projections = BTreeMap::new();
-    let mut artifacts = BTreeMap::new();
     let mut sources = Vec::new();
     for source in &input.sources {
         let binding = snapshot.binding(&source.path)?;
@@ -101,7 +96,6 @@ pub fn compile(
             }
             catalog::validate_design(&source.path, input, &inspection.assertions)?;
             projections.insert(source.path.clone(), inspection.assertions);
-            artifacts.insert(source.path.clone(), store.artifact(&binding).cloned());
         }
         sources.push(SourceStatus {
             source: source.path.clone(),
@@ -164,7 +158,6 @@ pub fn compile(
         world.state = DesignState::Loose;
     }
     let input_fingerprint = snapshot.fingerprint()?;
-    let artifact_report = format!("sigil://expanded-world/design/{input_fingerprint}");
     let design_fingerprint = hash(
         &serde_json::to_vec(&(
             "sigil-design-world-v1",
@@ -189,10 +182,8 @@ pub fn compile(
         design_fingerprint,
         all_fresh,
         intentional_empty: input.sources.is_empty(),
-        artifact_report,
         sources,
         assertion_sources,
-        artifacts,
         diagnostics,
         world,
         catalog,

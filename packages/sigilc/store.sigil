@@ -1,7 +1,7 @@
 component SigilProjectionStore {
   goal {
     Publish disposable source-bound assertions without accepting stale or
-    out-of-order reconstruction as current evidence.
+    out-of-order reconstruction as current.
   }
 
   interface {
@@ -10,12 +10,12 @@ component SigilProjectionStore {
       Recover even from a malformed index without interpreting its contents.
       Remove symlink artifacts themselves without following their targets.
       Keep the lock inode in place so cleanup cannot split concurrent writers.
-      Preserve authored sources, workspace configuration and external job inputs.
+      Preserve authored sources, workspace configuration and external preparation inputs.
     }
 
     ImplementationCommands {
       Prepare exactly one copied source file, fixed ontology and identity-only
-      catalog for the worker. Keep its job descriptor with the external caller.
+      catalog for the external semanticizer. Keep its binding with the caller.
       Require current non-Disjoint Design and validate all catalog references
       before ingesting Implementation. Accept an explicit source selection for
       stale inspection and comparison. Compile each world independently, then
@@ -39,12 +39,10 @@ component SigilProjectionStore {
     DesignCommands {
       Expose prepare, ingest, stale and compile for Design and entities for its
       catalog. Accept an explicit frontend bundle and workspace root. Preparation
-      writes only bound Design context, fixed ontology, a job descriptor and a
-      artifact-evidence template into a new caller-selected directory;
-      refuse to overwrite existing directories. The template binds its preparation
-      and job references, and makes the required final pending attempt shape
-      explicit without supplying worker, ingest, Turtle or result evidence.
-      Ingestion checks the job source and current inputs before publication.
+      writes only bound Design context, fixed ontology and a semantic binding
+      into a new caller-selected directory; refuse to overwrite existing
+      directories. Ingestion checks the binding source and current inputs before
+      publication.
       Compile Design exits zero for Coherent (green) or Loose (yellow with
       warnings), and one only for Disjoint (red). Invalid options exit two;
       operational failure without a completed semantic result exits three.
@@ -70,38 +68,10 @@ component SigilProjectionStore {
       current inputs and recheck source and Design dependency bytes. Publish
       bounded data-only assertions by temporary-file replacement, then atomically
       replace the index that binds their checksum to inputs and generation.
-      Reject duplicate jobs and changed source, catalog or format inputs.
-      Publication tokens cannot repeat after cache deletion and reconstruction;
-      an old job cannot regain authority when disposable generations restart.
-      Keep scheduling and workers outside the store. At acceptance, persist an
-      immutable versioned artifact-evidence record supplied by the external
-      subagent: source binding, preparation and job references, native job
-      fingerprint, worker process record, ingest command, every Turtle/result
-      attempt, projection path and publication generation. This record is
-      evidence linkage, not model data,
-      a task ledger or a worker registry. Ingest rejects an incomplete evidence
-      manifest when the caller asks for native evidence recording.
-    }
-
-    NativeArtifactEvidence {
-      Accept an optional artifact-evidence manifest alongside a matching ingest
-      job. Require the final pending attempt to name the submitted Turtle with
-      exit null; native ingest writes its actual accepted exit zero. Preserve
-      earlier rejected attempts with their observed exits without interpreting
-      their text.
-
-      Prepare emits a structurally valid template with exactly the manifest
-      fields, one pending attempt with `exit: null`, and nonempty replacement
-      references. A worker replaces those placeholder references, records each
-      rejected attempt with its numeric exit, and keeps exactly one final pending
-      attempt before ingest. Native diagnostics show the same minimal JSON shape.
-      Bind the record to the accepted source fingerprint, generation and exact
-      projection key. Expose every fresh source through projection index and
-      expanded-world reports: complete records carry their links, while a null
-      artifact explicitly identifies a projection that predates native evidence.
-      A fresh process can therefore distinguish incomplete evidence without a
-      temporary tracker. Existing entries without a record remain semantically
-      readable but are incomplete evidence.
+      Reject duplicate preparations and changed source, catalog or format
+      inputs. Publication tokens cannot repeat after cache deletion and
+      reconstruction; an old binding cannot regain authority when disposable
+      generations restart. Keep scheduling and workers outside the store.
     }
 
     BindingHistory {
@@ -110,8 +80,8 @@ component SigilProjectionStore {
       publication and address superseded projections by their complete binding
       fingerprint, including the Implementation Design-catalog identity.
       Reuse a retained projection only when its complete binding is fresh for the
-      current operation. Do not key this cache by request item, task, worker or
-      scope identity, and do not turn it into a history or workflow ledger.
+      current operation. Do not key this cache by worker or scope identity, and
+      do not turn it into an external-work ledger.
     }
 
     IndexedAssembly {

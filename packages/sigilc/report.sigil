@@ -10,9 +10,6 @@ component SigilGateDiagnostics {
       Implementation comparison. Preserve named states, input identities and
       subcommand-specific exits. Findings describe existing eqval violations,
       unresolved obligations, source freshness and retained frontend diagnostics.
-      Expanded-world reports also expose the immutable native artifact links
-      carried by accepted projections and a deterministic artifact_report
-      identity; these links are evidence metadata, never semantic assertions.
       Unavailable comparison keeps Implementation unset and explains the missing
       prerequisite; it is never rendered as Drift or a successful comparison.
     }

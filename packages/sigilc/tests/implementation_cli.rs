@@ -53,8 +53,8 @@ fn publish(root: &Workspace, side: &str, out: &str, body: &str) {
             side,
             "--source",
             source,
-            "--job",
-            &format!("{out}/job.json"),
+            "--binding",
+            &format!("{out}/binding.json"),
             "--turtle",
             "facts.ttl",
         ],
@@ -147,7 +147,7 @@ fn independent_cli_moves_from_unknown_to_closed_and_detects_relationship_only_dr
 }
 
 #[test]
-fn worker_gets_only_three_bound_inputs_and_neighbor_edits_do_not_reject_its_job() {
+fn worker_gets_only_three_bound_inputs_and_neighbor_edits_do_not_reject_its_binding() {
     let root = workspace();
     publish(&root, "design", "design", ":A s:provides :B .");
     let prepared = run(
@@ -163,13 +163,7 @@ fn worker_gets_only_three_bound_inputs_and_neighbor_edits_do_not_reject_its_job(
         0,
     );
     assert_eq!(prepared["inputs"].as_array().unwrap().len(), 3);
-    assert_eq!(prepared["evidence_template"], "worker/evidence.json");
-    let evidence: Value =
-        serde_json::from_slice(&std::fs::read(root.0.join("worker/evidence.json")).unwrap())
-            .unwrap();
-    assert_eq!(evidence["version"], 1);
-    assert_eq!(evidence["job"], "worker/job.json");
-    assert!(evidence["attempts"][0]["exit"].is_null());
+    assert!(!root.0.join("worker/evidence.json").exists());
     assert_eq!(
         std::fs::read(root.0.join("worker/source")).unwrap(),
         b"\xff\0direct target bytes"
@@ -193,8 +187,8 @@ fn worker_gets_only_three_bound_inputs_and_neighbor_edits_do_not_reject_its_job(
             "implementation",
             "--source",
             "main.rs",
-            "--job",
-            "worker/job.json",
+            "--binding",
+            "worker/binding.json",
             "--turtle",
             "facts.ttl",
         ],
@@ -207,8 +201,8 @@ fn worker_gets_only_three_bound_inputs_and_neighbor_edits_do_not_reject_its_job(
             "implementation",
             "--source",
             "main.rs",
-            "--job",
-            "worker/job.json",
+            "--binding",
+            "worker/binding.json",
             "--turtle",
             "facts.ttl",
         ],

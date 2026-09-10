@@ -352,8 +352,8 @@ external interpretation -> Turtle
 ingest --binding binding.json -> validated accepted projection
 ```
 
-This is a proposed replacement for the current process-oriented CLI. Handoff
-files live where the external caller chooses, not as compiler job state.
+This is the current compiler protocol. Handoff files live where the external
+caller chooses, not as compiler-owned process state.
 Ingest validates source/input binding, restricted data, and expected generation;
 store publication preserves locking and atomic accepted-cache visibility. It
 rejects obsolete preparation rather than overwriting a newer generation.

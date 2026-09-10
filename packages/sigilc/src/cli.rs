@@ -5,12 +5,9 @@ use crate::{
     implementation,
     inputs::{self, DesignSnapshot},
     eqval::{DesignState, Limits},
-    request::{self, CompletionDossierInput, ItemState, LifecycleState, RequestDefinition},
     scope::{ResolvedScope, Scope},
     sources::{self, Selection},
-    store::{
-        ARTIFACT_EVIDENCE_VERSION, ArtifactEvidenceInput, Freshness, Job, LockedStore, StoreLimits,
-    },
+    store::{Freshness, LockedStore, PreparedBinding, StoreLimits},
     turtle::{self, TurtleLimits},
 };
 use serde::Serialize;
@@ -25,9 +22,6 @@ pub type Output = Result<(u8, String), (u8, String)>;
 
 // @sigil implements packages/sigilc/store.sigil::SigilProjectionStore::DesignCommands interface
 pub fn run(args: &[&str]) -> Output {
-    if args.first() == Some(&"request") {
-        return run_request(args);
-    }
     if args.first() == Some(&"clean") {
         let root = match args {
             ["clean"] => ".",
@@ -57,9 +51,8 @@ pub fn run(args: &[&str]) -> Output {
             "--root",
             "--frontend",
             "--source",
-            "--job",
+            "--binding",
             "--turtle",
-            "--evidence",
         ],
         _ => &[
             "--root",
@@ -127,8 +120,8 @@ pub fn run(args: &[&str]) -> Output {
     } else {
         None
     };
-    let job_path = if command == "ingest" {
-        Some(required("--job")?)
+    let binding_path = if command == "ingest" {
+        Some(required("--binding")?)
     } else {
         None
     };
@@ -137,17 +130,11 @@ pub fn run(args: &[&str]) -> Output {
     } else {
         None
     };
-    let evidence_path = if command == "ingest" {
-        options.get("--evidence").copied()
-    } else {
-        None
-    };
     let root = PathBuf::from(options.get("--root").copied().unwrap_or("."));
     if [
         Some(frontend),
-        job_path,
+        binding_path,
         turtle_path,
-        evidence_path,
         options.get("--limits").copied(),
         options.get("--selection").copied(),
         options.get("--scope").copied(),
@@ -233,7 +220,7 @@ pub fn run(args: &[&str]) -> Output {
             "prepare" => {
                 design::valid_frontend(&snapshot).map_err(runtime)?;
                 let source = source.unwrap();
-                let job = store
+                let binding = store
                     .prepare(snapshot.binding(source).map_err(runtime)?)
                     .map_err(runtime)?;
                 let out = Path::new(out.unwrap());
@@ -250,27 +237,21 @@ pub fn run(args: &[&str]) -> Output {
                 .map_err(runtime)?;
                 write_new(&out.join("ontology.json"), &turtle::ontology_document())
                     .map_err(runtime)?;
-                write_new(&out.join("job.json"), &job).map_err(runtime)?;
-                write_new(
-                    &out.join("evidence.json"),
-                    &artifact_evidence_template(out, &out.join("job.json")),
-                )
-                .map_err(runtime)?;
+                write_new(&out.join("binding.json"), &binding).map_err(runtime)?;
                 json(
                     0,
-                    &serde_json::json!({"version":1,"job":out.join("job.json"),"inputs":[out.join("design.json"),out.join("ontology.json")],"evidence_template":out.join("evidence.json"),"input_fingerprint":job.binding.fingerprint()}),
+                    &serde_json::json!({"version":1,"binding":out.join("binding.json"),"inputs":[out.join("design.json"),out.join("ontology.json")],"input_fingerprint":binding.binding.fingerprint()}),
                 )
             }
             "ingest" => {
                 design::valid_frontend(&snapshot).map_err(runtime)?;
                 let source = source.unwrap();
-                let evidence = parse_evidence(evidence_path)?;
-                let job_ref = job_path.unwrap();
+                let binding_ref = binding_path.unwrap();
                 let turtle_ref = turtle_path.unwrap();
-                let job: Job = serde_json::from_slice(&read(job_ref, 16_000_000).map_err(runtime)?)
+                let binding: PreparedBinding = serde_json::from_slice(&read(binding_ref, 16_000_000).map_err(runtime)?)
                     .map_err(|e| runtime(e.to_string()))?;
-                if job.binding.side() != "design" || job.binding.source.path != source {
-                    return Err((2, "job does not bind the requested Design source".into()));
+                if binding.binding.side() != "design" || binding.binding.source.path != source {
+                    return Err((2, "binding does not bind the requested Design source".into()));
                 }
                 let facts = turtle::parse(
                     &read(
@@ -282,16 +263,13 @@ pub fn run(args: &[&str]) -> Output {
                 )
                 .map_err(runtime)?;
                 catalog::validate_design(source, snapshot.input(), &facts).map_err(runtime)?;
-                validate_ingest_evidence(evidence.as_ref(), job_ref, turtle_ref)
-                    .map_err(runtime)?;
-                let binding = snapshot.binding(source).map_err(runtime)?;
+                let current = snapshot.binding(source).map_err(runtime)?;
                 let generation = store
-                    .publish(&job, &binding, &facts, evidence)
+                    .publish(&binding, &current, &facts)
                     .map_err(runtime)?;
-                let artifact = store.artifact(&binding).cloned();
                 json(
                     0,
-                    &serde_json::json!({"version":1,"source":source,"generation":generation,"assertions":facts.len(),"artifact":artifact}),
+                    &serde_json::json!({"version":1,"source":source,"generation":generation,"assertions":facts.len()}),
                 )
             }
             "stale" => {
@@ -348,520 +326,6 @@ pub fn run(args: &[&str]) -> Output {
     }
 }
 
-fn run_request(args: &[&str]) -> Output {
-    if args == ["request", "rearrange", "--help"] {
-        return json(
-            0,
-            &serde_json::json!({"usage":"sigilc request rearrange --order ID,ID,... [--root DIR]","description":"reorder every active request item while preserving predecessor validity"}),
-        );
-    }
-    let action = match args {
-        [
-            "request",
-            action @ ("archive" | "create" | "record" | "rearrange" | "status"),
-            tail @ ..,
-        ] => (*action, tail),
-        _ => {
-            return Err((
-                2,
-                "Usage: sigilc request archive|create|record|rearrange|status [options]".into(),
-            ));
-        }
-    };
-    let mut options = BTreeMap::new();
-    let mut rest = action.1;
-    while let Some((flag, next)) = rest.split_first() {
-        if ![
-            "--root",
-            "--frontend",
-            "--definition",
-            "--dossier",
-            "--order",
-            "--limits",
-            "--format",
-        ]
-        .contains(flag)
-            || options.contains_key(flag)
-        {
-            return Err((2, format!("unknown or duplicate option: {flag}")));
-        }
-        let Some((value, remaining)) = next.split_first() else {
-            return Err((2, format!("missing value: {flag}")));
-        };
-        options.insert(*flag, *value);
-        rest = remaining;
-    }
-    if options.get("--format").is_some_and(|v| *v != "json") {
-        return Err((2, "this command supports --format json".into()));
-    }
-    if action.0 == "create" && !options.contains_key("--definition") {
-        return Err((2, "required option: --definition".into()));
-    }
-    if action.0 != "create" && options.contains_key("--definition") {
-        return Err((2, "--definition is only valid for request create".into()));
-    }
-    if action.0 == "record" && !options.contains_key("--dossier") {
-        return Err((2, "required option: --dossier".into()));
-    }
-    if action.0 != "record" && options.contains_key("--dossier") {
-        return Err((2, "--dossier is only valid for request record".into()));
-    }
-    if action.0 == "rearrange" && !options.contains_key("--order") {
-        return Err((2, "required option: --order".into()));
-    }
-    if action.0 != "rearrange" && options.contains_key("--order") {
-        return Err((2, "--order is only valid for request rearrange".into()));
-    }
-    let root = PathBuf::from(options.get("--root").copied().unwrap_or("."));
-    let limits = options
-        .get("--limits")
-        .map(|path| {
-            read(path, 1_000_000).and_then(|bytes| {
-                serde_json::from_slice::<Limits>(&bytes).map_err(|e| e.to_string())
-            })
-        })
-        .transpose()
-        .map_err(runtime)?
-        .unwrap_or_default();
-    let store_limits = StoreLimits::default();
-    let store = LockedStore::open(&root, store_limits).map_err(runtime)?;
-    match action.0 {
-        "archive" => {
-            let existing =
-                request::load(store.workflow_state().map_err(runtime)?).map_err(runtime)?;
-            let fingerprint = request::fingerprint(&existing.definition).map_err(runtime)?;
-            let archive = store
-                .archive_workflow_state(&fingerprint)
-                .map_err(runtime)?;
-            json(
-                0,
-                &serde_json::json!({"version":1,"archive":archive,"request":existing}),
-            )
-        }
-        "create" => {
-            let frontend = options
-                .get("--frontend")
-                .copied()
-                .ok_or_else(|| (2, "required option: --frontend".into()))?;
-            let definition: RequestDefinition =
-                serde_json::from_slice(&read(options["--definition"], 1_000_000).map_err(runtime)?)
-                    .map_err(|e| runtime(format!("invalid scoped request definition: {e}")))?;
-            request::validate(&definition).map_err(runtime)?;
-            if let Some(existing) = store.workflow_state().map_err(runtime)? {
-                let existing = request::load(Some(existing)).map_err(runtime)?;
-                if existing.request_fingerprint
-                    == request::fingerprint(&definition).map_err(runtime)?
-                    && existing.frontend == frontend
-                {
-                    return json(0, &serde_json::json!({"version":1,"request":existing}));
-                }
-                return Err((
-                    2,
-                    "a different scoped request already exists; preserve its evidence before replacing .sigil/workflow/request.json".into(),
-                ));
-            }
-            let frontend_bytes = read(frontend, 32_000_000).map_err(runtime)?;
-            let input = DesignInput::parse(&frontend_bytes).map_err(runtime)?;
-            let snapshot = DesignSnapshot::capture(&root, input, store_limits.max_source_bytes)
-                .map_err(runtime)?;
-            let frontend_fingerprint = snapshot.fingerprint().map_err(runtime)?;
-            let frontend_snapshot = store
-                .publish_workflow_frontend(&frontend_fingerprint, &frontend_bytes)
-                .map_err(runtime)?;
-            let scopes = definition
-                .items
-                .iter()
-                .map(|item| {
-                    let mut input = DesignInput::parse(&frontend_bytes).map_err(runtime)?;
-                    let resolved = item
-                        .scope
-                        .clone()
-                        .resolve(&root, &mut input)
-                        .map_err(runtime)?;
-                    serde_json::to_value(resolved.report).map_err(|e| runtime(e.to_string()))
-                })
-                .collect::<Result<Vec<_>, _>>()?;
-            let state = request::new_state(
-                definition,
-                frontend.to_owned(),
-                Some(frontend_snapshot),
-                frontend_fingerprint,
-                scopes,
-            )
-            .map_err(runtime)?;
-            store
-                .publish_workflow_state(&request::encode(&state).map_err(runtime)?)
-                .map_err(runtime)?;
-            json(0, &serde_json::json!({"version":1,"request":state}))
-        }
-        "record" => {
-            let mut state =
-                request::load(store.workflow_state().map_err(runtime)?).map_err(runtime)?;
-            let dossier: CompletionDossierInput =
-                serde_json::from_slice(&read(options["--dossier"], 1_000_000).map_err(runtime)?)
-                    .map_err(|e| runtime(format!("invalid completion dossier: {e}")))?;
-            let completion = request::completion(&state, dossier).map_err(runtime)?;
-            if let Some(existing) = &state.completion {
-                if existing.dossier == completion.dossier {
-                    return json(0, &serde_json::json!({"version":1,"request":state}));
-                }
-                return Err((
-                    2,
-                    "a completion dossier already exists; status must reopen the request or archive it before recording different evidence".into(),
-                ));
-            }
-            state.completion = Some(completion);
-            store
-                .publish_workflow_state(&request::encode(&state).map_err(runtime)?)
-                .map_err(runtime)?;
-            json(0, &serde_json::json!({"version":1,"request":state}))
-        }
-        "rearrange" => {
-            let mut state =
-                request::load(store.workflow_state().map_err(runtime)?).map_err(runtime)?;
-            let order = options["--order"]
-                .split(',')
-                .map(str::to_owned)
-                .collect::<Vec<_>>();
-            request::rearrange(&mut state, &order).map_err(runtime)?;
-            store
-                .publish_workflow_state(&request::encode(&state).map_err(runtime)?)
-                .map_err(runtime)?;
-            json(0, &serde_json::json!({"version":1,"request":state}))
-        }
-        "status" => {
-            let mut state =
-                request::load(store.workflow_state().map_err(runtime)?).map_err(runtime)?;
-            let (frontend, native_capture) = match options.get("--frontend").copied() {
-                Some(frontend) => (frontend, false),
-                None => (
-                    state
-                        .frontend_snapshot
-                        .as_deref()
-                        .unwrap_or(state.frontend.as_str()),
-                    state.frontend_snapshot.is_some(),
-                ),
-            };
-            let frontend_path = if native_capture {
-                root.join(frontend)
-            } else {
-                PathBuf::from(frontend)
-            };
-            let frontend_path = frontend_path
-                .to_str()
-                .ok_or_else(|| runtime("non-UTF-8 scoped request frontend path".into()))?;
-            let frontend_bytes = read(frontend_path, 32_000_000).map_err(runtime)?;
-            let parsed = DesignInput::parse(&frontend_bytes).map_err(runtime)?;
-            let current_frontend_fingerprint =
-                DesignSnapshot::capture(&root, parsed, store_limits.max_source_bytes)
-                    .and_then(|snapshot| snapshot.fingerprint())
-                    .unwrap_or_else(|_| sources::hash(&frontend_bytes));
-            let mut updated = Vec::with_capacity(state.definition.items.len());
-            let mut states = BTreeMap::new();
-            for (index, item) in state.definition.items.iter().enumerate() {
-                let prior_scope = state.items[index].scope.clone();
-                let mut input = match DesignInput::parse(&frontend_bytes) {
-                    Ok(input) => input,
-                    Err(error) => {
-                        let item_state = unavailable_item(
-                            item,
-                            prior_scope,
-                            None,
-                            format!("frontend parse failed: {error}"),
-                        );
-                        states.insert(item.id.clone(), item_state.state.clone());
-                        updated.push(item_state);
-                        continue;
-                    }
-                };
-                let resolved = match item.scope.clone().resolve(&root, &mut input) {
-                    Ok(scope) => scope,
-                    Err(error) => {
-                        let item_state = unavailable_item(
-                            item,
-                            prior_scope,
-                            None,
-                            format!("scope unavailable: {error}"),
-                        );
-                        states.insert(item.id.clone(), item_state.state.clone());
-                        updated.push(item_state);
-                        continue;
-                    }
-                };
-                let scope_value =
-                    serde_json::to_value(&resolved.report).map_err(|e| runtime(e.to_string()))?;
-                let snapshot =
-                    match DesignSnapshot::capture(&root, input, store_limits.max_source_bytes) {
-                        Ok(snapshot) => snapshot,
-                        Err(error) => {
-                            let item_state = unavailable_item(
-                                item,
-                                Some(scope_value),
-                                None,
-                                format!("frontend inputs unavailable: {error}"),
-                            );
-                            states.insert(item.id.clone(), item_state.state.clone());
-                            updated.push(item_state);
-                            continue;
-                        }
-                    };
-                let blocked = item.after.iter().find(|predecessor| {
-                    !states
-                        .get(*predecessor)
-                        .is_some_and(LifecycleState::terminal)
-                });
-                let input_fingerprint = snapshot.fingerprint().map_err(runtime)?;
-                if let Some(predecessor) = blocked {
-                    let predecessor_state = states
-                        .get(predecessor)
-                        .expect("validated predecessor state");
-                    let item_state = ItemState {
-                        id: item.id.clone(),
-                        goal: item.goal.clone(),
-                        after: item.after.clone(),
-                        evidence: item.evidence.clone(),
-                        state: LifecycleState::Queued,
-                        scope: Some(scope_value),
-                        gate: None,
-                        input_fingerprint: Some(input_fingerprint),
-                        reason: Some(format!(
-                            "predecessor {predecessor} is {}",
-                            lifecycle_label(predecessor_state)
-                        )),
-                    };
-                    states.insert(item.id.clone(), item_state.state.clone());
-                    updated.push(item_state);
-                    continue;
-                }
-                let item_state = evaluate_request_item(
-                    item,
-                    resolved,
-                    snapshot,
-                    &store,
-                    limits,
-                    scope_value,
-                    input_fingerprint,
-                )?;
-                states.insert(item.id.clone(), item_state.state.clone());
-                updated.push(item_state);
-            }
-            state.frontend = frontend.to_owned();
-            state.frontend_input_fingerprint = current_frontend_fingerprint;
-            state.items = updated;
-            if state.completion.as_ref().is_some_and(|completion| {
-                completion.frontend_input_fingerprint != state.frontend_input_fingerprint
-                    || completion.items.len() != state.items.len()
-                    || completion
-                        .items
-                        .iter()
-                        .zip(&state.items)
-                        .any(|(saved, current)| {
-                            saved.id != current.id
-                                || saved.after != current.after
-                                || saved.evidence != current.evidence
-                                || saved.state != current.state
-                                || saved.scope != current.scope
-                                || saved.gate != current.gate
-                                || saved.input_fingerprint != current.input_fingerprint
-                                || saved.reason != current.reason
-                        })
-                    || state.items.iter().any(|item| !item.state.terminal())
-            }) {
-                state.completion = None;
-            }
-            let code = if state
-                .items
-                .iter()
-                .any(|item| item.state == LifecycleState::Unavailable)
-            {
-                3
-            } else if state
-                .items
-                .iter()
-                .any(|item| item.state == LifecycleState::Drift)
-            {
-                1
-            } else {
-                0
-            };
-            store
-                .publish_workflow_state(&request::encode(&state).map_err(runtime)?)
-                .map_err(runtime)?;
-            json(code, &serde_json::json!({"version":1,"request":state}))
-        }
-        _ => unreachable!(),
-    }
-}
-
-fn unavailable_item(
-    item: &request::RequestItem,
-    scope: Option<serde_json::Value>,
-    input_fingerprint: Option<String>,
-    reason: String,
-) -> ItemState {
-    ItemState {
-        id: item.id.clone(),
-        goal: item.goal.clone(),
-        after: item.after.clone(),
-        evidence: item.evidence.clone(),
-        state: LifecycleState::Unavailable,
-        scope,
-        gate: None,
-        input_fingerprint,
-        reason: Some(reason),
-    }
-}
-
-fn lifecycle_label(state: &LifecycleState) -> &'static str {
-    match state {
-        LifecycleState::Queued => "queued",
-        LifecycleState::Ready => "ready",
-        LifecycleState::Closed => "closed",
-        LifecycleState::Converged => "converged",
-        LifecycleState::Drift => "drift",
-        LifecycleState::Unavailable => "unavailable",
-    }
-}
-
-fn evaluate_request_item(
-    item: &request::RequestItem,
-    scope: ResolvedScope,
-    snapshot: DesignSnapshot,
-    store: &LockedStore,
-    limits: Limits,
-    scope_value: serde_json::Value,
-    input_fingerprint: String,
-) -> Result<ItemState, (u8, String)> {
-    let design = match design::compile(
-        &snapshot,
-        store,
-        limits,
-        scope.report.design.intentional_empty,
-    ) {
-        Ok(report) => report,
-        Err(error) => {
-            return Ok(unavailable_item(
-                item,
-                Some(scope_value),
-                Some(input_fingerprint),
-                format!("Design gate unavailable: {error}"),
-            ));
-        }
-    };
-    let design_state = design.world.state;
-    let design_gate = serde_json::json!({
-        "state": design_state,
-        "allFresh": design.all_fresh,
-        "fingerprint": design.design_fingerprint,
-    });
-    if design_state == DesignState::Disjoint {
-        return Ok(ItemState {
-            id: item.id.clone(),
-            goal: item.goal.clone(),
-            after: item.after.clone(),
-            evidence: item.evidence.clone(),
-            state: LifecycleState::Unavailable,
-            scope: Some(scope_value),
-            gate: Some(serde_json::json!({"design":design_gate})),
-            input_fingerprint: Some(input_fingerprint),
-            reason: Some("Design gate is Disjoint".into()),
-        });
-    }
-    if !design.all_fresh {
-        return Ok(ItemState {
-            id: item.id.clone(),
-            goal: item.goal.clone(),
-            after: item.after.clone(),
-            evidence: item.evidence.clone(),
-            state: LifecycleState::Ready,
-            scope: Some(scope_value),
-            gate: Some(serde_json::json!({"design":design_gate})),
-            input_fingerprint: Some(input_fingerprint),
-            reason: Some("selected Design projections are not fresh".into()),
-        });
-    }
-    let Some(frozen) = &design.catalog else {
-        return Ok(unavailable_item(
-            item,
-            Some(scope_value),
-            Some(input_fingerprint),
-            "current Design catalog unavailable".into(),
-        ));
-    };
-    let assembly = match implementation::assemble_manifest(
-        &scope.implementation,
-        &frozen.catalog,
-        store,
-        limits.max_input_assertions,
-    ) {
-        Ok(assembly) => assembly,
-        Err(error) => {
-            return Ok(unavailable_item(
-                item,
-                Some(scope_value),
-                Some(input_fingerprint),
-                format!("Implementation gate unavailable: {error}"),
-            ));
-        }
-    };
-    let all_implementation_fresh = assembly.all_fresh;
-    let implementation = assembly.compile(limits).map_err(runtime)?;
-    let comparison = comparison::compare(
-        &design.world,
-        &implementation.world,
-        comparison::FreshInputs {
-            all_design_fresh: design.all_fresh,
-            all_implementation_fresh,
-        },
-        limits,
-    )
-    .map_err(runtime)?;
-    let implementation_state = comparison.implementation;
-    let gate = serde_json::json!({
-        "design": design_gate,
-        "implementation": {
-            "allFresh": implementation.all_fresh,
-            "inputFingerprint": implementation.input_fingerprint,
-        },
-        "comparison": {
-            "state": implementation_state,
-            "freshInputs": comparison.fresh_inputs,
-            "unresolved": comparison.unresolved.len(),
-            "disagreements": comparison.disagreements.len(),
-        },
-    });
-    let (state, reason) = if !all_implementation_fresh {
-        (
-            LifecycleState::Ready,
-            Some("selected Implementation projections are not fresh".into()),
-        )
-    } else {
-        match implementation_state {
-            Some(comparison::ImplementationState::Closed) => (LifecycleState::Closed, None),
-            Some(comparison::ImplementationState::Converged) => (LifecycleState::Converged, None),
-            Some(comparison::ImplementationState::Drift) => (
-                LifecycleState::Drift,
-                Some("Implementation gate is Drift".into()),
-            ),
-            None => (
-                LifecycleState::Unavailable,
-                Some("comparison did not produce an Implementation state".into()),
-            ),
-        }
-    };
-    Ok(ItemState {
-        id: item.id.clone(),
-        goal: item.goal.clone(),
-        after: item.after.clone(),
-        evidence: item.evidence.clone(),
-        state,
-        scope: Some(scope_value),
-        gate: Some(gate),
-        input_fingerprint: Some(input_fingerprint),
-        reason,
-    })
-}
-
 // @sigil implements packages/sigilc/store.sigil::SigilProjectionStore::ImplementationCommands interface
 fn run_implementation(
     command: &str,
@@ -893,31 +357,26 @@ fn run_implementation(
             .map_err(runtime)?;
         let binding = inputs::implementation(&captured, catalog);
         if command == "prepare" {
-            let job = store.prepare(binding).map_err(runtime)?;
+            let prepared = store.prepare(binding).map_err(runtime)?;
             let out = Path::new(options["--out"]);
             fs::create_dir(out).map_err(|e| runtime(e.to_string()))?;
             write_bytes_new(&out.join("source"), &captured.bytes).map_err(runtime)?;
             write_new(&out.join("ontology.json"), &turtle::ontology_document()).map_err(runtime)?;
             write_new(&out.join("catalog.json"), catalog).map_err(runtime)?;
-            write_new(&out.join("job.json"), &job).map_err(runtime)?;
-            write_new(
-                &out.join("evidence.json"),
-                &artifact_evidence_template(out, &out.join("job.json")),
-            )
-            .map_err(runtime)?;
+            write_new(&out.join("binding.json"), &prepared).map_err(runtime)?;
             return json(
                 0,
-                &serde_json::json!({"version":1,"job":out.join("job.json"),"inputs":[out.join("source"),out.join("ontology.json"),out.join("catalog.json")],"evidence_template":out.join("evidence.json"),"input_fingerprint":job.binding.fingerprint()}),
+                &serde_json::json!({"version":1,"binding":out.join("binding.json"),"inputs":[out.join("source"),out.join("ontology.json"),out.join("catalog.json")],"input_fingerprint":prepared.binding.fingerprint()}),
             );
         }
-        let job_ref = options["--job"];
+        let binding_ref = options["--binding"];
         let turtle_ref = options["--turtle"];
-        let job: Job = serde_json::from_slice(&read(job_ref, 16_000_000).map_err(runtime)?)
+        let prepared: PreparedBinding = serde_json::from_slice(&read(binding_ref, 16_000_000).map_err(runtime)?)
             .map_err(|e| runtime(e.to_string()))?;
-        if job.binding.side() != "implementation" || job.binding.source.path != source {
+        if prepared.binding.side() != "implementation" || prepared.binding.source.path != source {
             return Err((
                 2,
-                "job does not bind the requested Implementation source".into(),
+                "binding does not bind the requested Implementation source".into(),
             ));
         }
         let facts = turtle::parse(
@@ -930,15 +389,12 @@ fn run_implementation(
         )
         .map_err(runtime)?;
         catalog.validate_implementation(&facts).map_err(runtime)?;
-        let evidence = parse_evidence(options.get("--evidence").copied())?;
-        validate_ingest_evidence(evidence.as_ref(), job_ref, turtle_ref).map_err(runtime)?;
         let generation = store
-            .publish(&job, &binding, &facts, evidence)
+            .publish(&prepared, &binding, &facts)
             .map_err(runtime)?;
-        let artifact = store.artifact(&binding).cloned();
         return json(
             0,
-            &serde_json::json!({"version":1,"source":source,"generation":generation,"assertions":facts.len(),"artifact":artifact}),
+            &serde_json::json!({"version":1,"source":source,"generation":generation,"assertions":facts.len()}),
         );
     }
     let assembly = if let Some(scope) = scope {
@@ -1047,56 +503,11 @@ fn write_bytes_new(path: &Path, bytes: &[u8]) -> Result<(), String> {
     file.write_all(bytes).map_err(|e| e.to_string())
 }
 
-fn artifact_evidence_template(out: &Path, job: &Path) -> serde_json::Value {
-    serde_json::json!({
-        "version": ARTIFACT_EVIDENCE_VERSION,
-        "preparation": out,
-        "job": job,
-        "worker": "replace-with-worker-record",
-        "ingest": "replace-with-exact-ingest-command",
-        "attempts": [{
-            "turtle": "replace-with-submitted-turtle",
-            "result": "replace-with-ingest-result",
-            "exit": null
-        }]
-    })
-}
-
 fn runtime(message: String) -> (u8, String) {
     match ingest_hint(&message) {
         Some(hint) => (3, format!("{message}\nhint: {hint}")),
         None => (3, message),
     }
-}
-
-fn validate_ingest_evidence(
-    evidence: Option<&ArtifactEvidenceInput>,
-    job: &str,
-    turtle: &str,
-) -> Result<(), String> {
-    let Some(evidence) = evidence else {
-        return Ok(());
-    };
-    evidence.validate()?;
-    if evidence.job != job {
-        return Err("artifact evidence job reference does not match --job".into());
-    }
-    if evidence
-        .attempts
-        .last()
-        .is_none_or(|attempt| attempt.turtle != turtle)
-    {
-        return Err("artifact evidence final Turtle reference does not match --turtle".into());
-    }
-    Ok(())
-}
-
-fn parse_evidence(path: Option<&str>) -> Result<Option<ArtifactEvidenceInput>, (u8, String)> {
-    path.map(|path| {
-        serde_json::from_slice::<ArtifactEvidenceInput>(&read(path, 1_000_000).map_err(runtime)?)
-            .map_err(|e| runtime(format!("invalid artifact evidence: {e}")))
-    })
-    .transpose()
 }
 
 fn ingest_hint(message: &str) -> Option<&'static str> {
@@ -1125,19 +536,14 @@ fn ingest_hint(message: &str) -> Option<&'static str> {
         || message.starts_with("frontend context changed:")
     {
         return Some(
-            "recapture the structural Design export and run prepare again; do not reuse this job or Turtle",
+            "recapture the structural Design export and run prepare again; do not reuse this binding or Turtle",
         );
     }
     if message.starts_with("prepared semantic inputs no longer match current inputs")
         || message.starts_with("projection generation changed;")
     {
         return Some(
-            "run prepare again and submit the returned Turtle with its new caller-held job.json",
-        );
-    }
-    if message.contains("artifact evidence") {
-        return Some(
-            "start from prepare's evidence.json and replace its placeholders. Exact shape: {\"version\":1,\"preparation\":\"reference\",\"job\":\"reference\",\"worker\":\"reference\",\"ingest\":\"reference\",\"attempts\":[{\"turtle\":\"reference\",\"result\":\"reference\",\"exit\":null}]}. Each earlier rejected attempt has a numeric exit; only the final submitted attempt has exit null",
+            "run prepare again and submit the returned Turtle with its new caller-held binding.json",
         );
     }
     if message.starts_with("foreign or changed reserved declaration: urn:sigil:unit:") {
@@ -1187,7 +593,7 @@ fn ingest_hint(message: &str) -> Option<&'static str> {
     }
     if message.starts_with("unknown source-bound unit identity:") {
         return Some(
-            "assert only authored-unit IRIs explicitly present in the prepared source/catalog inputs; do not derive a unit ID from a Rust item or path. If this source has no supported catalog-bound assertion, submit valid zero-fact Turtle and keep the evidence attempt",
+            "assert only authored-unit IRIs explicitly present in the prepared source/catalog inputs; do not derive a unit ID from a Rust item or path. If this source has no supported catalog-bound assertion, submit a valid zero-fact Turtle result",
         );
     }
     if message == "contract relation must name a fixed entity predicate" {
@@ -1232,14 +638,6 @@ mod tests {
         assert!(hint.contains("at most one sigil:relation"));
     }
 
-    #[test]
-    fn artifact_evidence_hint_shows_the_initial_schema() {
-        let hint = ingest_hint("artifact evidence requires at least one ingest attempt")
-            .expect("artifact evidence failures have an actionable repair hint");
-        assert!(hint.contains("evidence.json"));
-        assert!(hint.contains("\"version\":1"));
-        assert!(hint.contains("\"exit\":null"));
-    }
 }
 fn json(code: u8, value: &impl Serialize) -> Output {
     Ok((

@@ -73,7 +73,7 @@ sigilc compile design --frontend /tmp/sigil-quickstart/frontend.json
 Without independent source reconstructions, this can report Loose with missing
 projection warnings. That is not evidence that implementation is complete.
 Follow the skill's [native compilation protocol](../integrations/skills/sigil/references/compilation-execution.md)
-for ordered scope, freshness, preparation, external worker inputs, ingestion,
+for scope, freshness, preparation, external interpreter inputs, ingestion,
 catalog export and comparison. Refresh captured inputs after changes.
 
 Design gates return Coherent or Loose with exit 0 and Disjoint with exit 1.
@@ -81,8 +81,8 @@ Implementation gates return Closed or Converged with exit 0 and Drift with exit 
 Loose and Converged are yellow with warnings. Usage is exit 2; runtime or
 unavailable comparison is exit 3. Inspection exits have their own meanings.
 
-Each independent Implementation worker receives only captured source bytes,
+Each independent Implementation interpreter receives only captured source bytes,
 fixed ontology and frozen identity catalog. Keep Design prose, neighboring code,
-job descriptors and repair feedback out of its inputs. The external host owns
+binding files and repair feedback out of its inputs. The external host owns
 model calls, isolation, coding and iteration. Actual checks and removal evidence
 remain necessary alongside semantic comparison.

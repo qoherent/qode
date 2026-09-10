@@ -72,14 +72,14 @@ fn publish(root: &Workspace, side: &str, source: &str, out: &str, body: &str, us
         "facts.ttl",
         format!("@prefix s: <https://sigil.dev/ontology/1#> . {body}").as_bytes(),
     );
-    let job = format!("{out}/job.json");
+    let binding = format!("{out}/binding.json");
     let mut args = vec![
         "ingest",
         side,
         "--source",
         source,
-        "--job",
-        &job,
+        "--binding",
+        &binding,
         "--turtle",
         "facts.ttl",
     ];
@@ -193,7 +193,7 @@ fn scoped_pipeline_excludes_unrelated_contradictions_and_reuses_objects_across_r
 }
 
 #[test]
-fn scoped_jobs_keep_three_worker_inputs_and_gate_exits() {
+fn scoped_bindings_keep_three_interpreter_inputs_and_gate_exits() {
     let root = workspace();
     publish(&root, "design", "a.sigil", "a", PROVIDES, true);
     publish(&root, "design", "b.sigil", "b", "", true);
@@ -211,7 +211,7 @@ fn scoped_jobs_keep_three_worker_inputs_and_gate_exits() {
     );
     assert_eq!(prepared["inputs"].as_array().unwrap().len(), 3);
     let catalog = std::fs::read_to_string(root.0.join("worker/catalog.json")).unwrap();
-    for forbidden in ["scope", "focus_order", "provides", "neighbor", "job"] {
+    for forbidden in ["scope", "focus_order", "provides", "neighbor", "binding"] {
         assert!(!catalog.contains(forbidden));
     }
     root.write(
@@ -226,8 +226,8 @@ fn scoped_jobs_keep_three_worker_inputs_and_gate_exits() {
             "implementation",
             "--source",
             "main.any",
-            "--job",
-            "worker/job.json",
+            "--binding",
+            "worker/binding.json",
             "--turtle",
             "facts.ttl",
         ],

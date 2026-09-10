@@ -5,7 +5,7 @@ use crate::{
     inputs::{PROJECTION_FORMAT, implementation_identity},
     eqval::{self, Limits, SaturatedWorld},
     sources::{Selection, SourceManifest, discover, hash},
-    store::{ArtifactEvidence, Freshness, LockedStore},
+    store::{Freshness, LockedStore},
     turtle::{Assertion, ontology_fingerprint},
 };
 use serde::Serialize;
@@ -22,12 +22,8 @@ pub struct ImplementationReport {
     pub catalog_fingerprint: String,
     pub intentional_empty: bool,
     pub all_fresh: bool,
-    pub artifact_report: String,
     pub sources: Vec<SourceStatus>,
     pub assertion_sources: BTreeMap<String, Vec<String>>,
-    /// One entry for every fresh source. `null` means that its accepted
-    /// projection predates native artifact evidence and is therefore incomplete.
-    pub artifacts: BTreeMap<String, Option<ArtifactEvidence>>,
     pub world: SaturatedWorld,
 }
 
@@ -38,7 +34,6 @@ pub struct Assembly {
     pub sources: Vec<SourceStatus>,
     assertions: BTreeSet<Assertion>,
     assertion_sources: BTreeMap<String, Vec<String>>,
-    artifacts: BTreeMap<String, Option<ArtifactEvidence>>,
     catalog_fingerprint: String,
 }
 
@@ -63,7 +58,6 @@ pub fn assemble_manifest(
 ) -> Result<Assembly, String> {
     let mut assertions = BTreeSet::new();
     let mut assertion_sources: BTreeMap<String, Vec<String>> = BTreeMap::new();
-    let mut artifacts = BTreeMap::new();
     let mut sources = Vec::new();
     let mut count = 0usize;
     for file in &manifest.files {
@@ -82,7 +76,6 @@ pub fn assemble_manifest(
                     .push(file.path.clone());
                 assertions.insert(fact);
             }
-            artifacts.insert(file.path.clone(), store.artifact(&binding).cloned());
         }
         sources.push(SourceStatus {
             source: file.path.clone(),
@@ -118,7 +111,6 @@ pub fn assemble_manifest(
         sources,
         assertions,
         assertion_sources,
-        artifacts,
         catalog_fingerprint: catalog.fingerprint().into(),
     })
 }
@@ -137,10 +129,6 @@ impl Assembly {
             ))
             .map_err(|e| e.to_string())?,
         );
-        let artifact_report = format!(
-            "sigil://expanded-world/implementation/{}",
-            self.input_fingerprint
-        );
         Ok(ImplementationReport {
             version: 1,
             input_fingerprint: self.input_fingerprint,
@@ -148,10 +136,8 @@ impl Assembly {
             catalog_fingerprint: self.catalog_fingerprint,
             intentional_empty: self.intentional_empty,
             all_fresh: self.all_fresh,
-            artifact_report,
             sources: self.sources,
             assertion_sources: self.assertion_sources,
-            artifacts: self.artifacts,
             world,
         })
     }

@@ -10,34 +10,27 @@ fn root_help() -> String {
 Commands:
   scope --frontend FILE --scope FILE
   ontology [--format text|json]
-  request create --frontend FILE --definition FILE [--root DIR]
-  request archive [--root DIR]
-  request record --dossier FILE [--root DIR]
-  request rearrange --order ID,ID,... [--root DIR]
-  request status [--frontend FILE] [--root DIR]
   prepare design --frontend FILE --source PATH --out NEW_DIR [--scope FILE]
-  ingest design --frontend FILE --source PATH --job FILE --turtle FILE|- [--evidence FILE] [--scope FILE]
+  ingest design --frontend FILE --source PATH --binding FILE --turtle FILE|- [--scope FILE]
   stale design --frontend FILE [--scope FILE]
   compile design --frontend FILE [--scope FILE] [--limits FILE] [--allow-empty]
   entities --frontend FILE [--scope FILE] [--limits FILE] [--allow-empty]
   prepare implementation --frontend FILE --source PATH --out NEW_DIR [--scope FILE]
-  ingest implementation --frontend FILE --source PATH --job FILE --turtle FILE|- [--evidence FILE] [--scope FILE]
+  ingest implementation --frontend FILE --source PATH --binding FILE --turtle FILE|- [--scope FILE]
   stale implementation --frontend FILE (--selection FILE | --scope FILE)
   compile implementation --frontend FILE (--selection FILE | --scope FILE)
   compare --frontend FILE (--selection FILE | --scope FILE) [--limits FILE]
   clean [--root DIR]
 
-Scope and ordered-request workflow:
+Scope and semantic compilation flow:
   1. Export structural input: sigil export design . > frontend.json
   2. Resolve ordered roots: sigilc scope --frontend frontend.json --scope scope.json
   3. Inspect freshness: sigilc stale design --frontend frontend.json --scope scope.json
   4. Prepare/ingest only stale, missing or dependency-invalid rows, then compile,
      export entities and compare.
-  5. Persist order: sigilc request create --frontend frontend.json --definition request.json
-  6. Rearrange active work: sigilc request rearrange --order ID,ID,...
-  7. Archive a terminal request before replacement: sigilc request archive
-  8. Record external proof: sigilc request record --dossier completion.json
-  9. Advance release: sigilc request status [--frontend frontend.json]
+  5. Compile Design and export entities.
+  6. Prepare and ingest Implementation sources.
+  7. Compile Implementation and compare semantic worlds.
 
 Gate exits: 0 = Coherent/Loose (Design), Closed/Converged (Implementation).
 1 = Disjoint (Design), Drift (Implementation). Loose/Converged are warnings.

@@ -117,21 +117,6 @@ try {
   );
   const scope = JSON.parse(reference.match(/```json\n([^]*?)\n```/)![1]);
   await Deno.writeTextFile(join(runDir, "scope.json"), JSON.stringify(scope));
-  // The documented request command consumes a caller-owned definition. Keep
-  // this fixture minimal and explicit; it exercises native request persistence
-  // without pretending that a fixture worker or Turtle proves reconstruction.
-  await Deno.writeTextFile(
-    join(runDir, "request.json"),
-    JSON.stringify({
-      version: 1,
-      id: "skill-request-fixture",
-      items: [{
-        id: "scope-a",
-        scope,
-        evidence: ["fixture-only-request-definition"],
-      }],
-    }),
-  );
   const run = async (command: string, expected = 0) => {
     const words = command.trim().split(/\s+/);
     const executable = words.shift() === "sigil" ? language : native;
@@ -168,43 +153,21 @@ try {
   );
   assert(commands.length >= 12, "Native protocol examples missing");
   for (const command of commands) {
-    // Attempt-2 lines document the fresh-worker repair round. Running them
-    // after the fixture's accepted attempt-1 would correctly hit the native
-    // one-shot job-generation guard, so leave that retry to the live loop.
-    if (
-      command.includes("attempt-2") ||
-      command.startsWith("sigilc request record")
-    ) continue;
+    if (command.includes("attempt-2")) continue;
     if (command.startsWith("sigilc ingest")) {
       const turtle = command.split("--turtle ")[1].split(" ")[0].replace(
         ".sigil/tmp/<run-id>",
         runDir,
       );
       await Deno.writeTextFile(turtle, "");
-      const evidence = command.split("--evidence ")[1].replace(
+      const binding = command.split("--binding ")[1].split(" ")[0].replace(
         ".sigil/tmp/<run-id>",
         runDir,
       );
-      const job = command.split("--job ")[1].split(" ")[0].replace(
-        ".sigil/tmp/<run-id>",
-        runDir,
-      );
-      await Deno.writeTextFile(
-        evidence,
-        JSON.stringify({
-          version: 2,
-          preparation: "fixture/preparation",
-          job,
-          worker: "fixture/subagent",
-          ingest: "fixture/sigilc-ingest",
-          attempts: [{ turtle, result: `${turtle}.result`, exit: null }],
-        }),
-      );
+      assert((await Deno.stat(binding)).isFile, `Missing binding: ${binding}`);
     }
-    const report = await run(
-      command,
-      command.startsWith("sigilc stale design") ? 1 : 0,
-    );
+    const expected = command.startsWith("sigilc stale design") ? 1 : 0;
+    const report = await run(command, expected);
     if (command.startsWith("sigilc scope")) {
       equal(report.scope.design.focus_order, scope.design.paths);
       const unavailable = await run(
@@ -214,49 +177,6 @@ try {
       equal(unavailable.comparison, null);
     }
     if (command.startsWith("sigilc ingest design")) {
-      // The reference says to repeat for every stale source; exercise that step.
-      const prepare = commands.find((c) =>
-        c.startsWith("sigilc prepare design")
-      )!;
-      await run(
-        prepare.replaceAll("design-a", "design-b").replace(
-          "a.sigil",
-          "b.sigil",
-        ),
-      );
-      const second = command.replaceAll("design-a", "design-b").replace(
-        "a.sigil",
-        "b.sigil",
-      );
-      const secondTurtle = second.split("--turtle ")[1].split(" ")[0].replace(
-        ".sigil/tmp/<run-id>",
-        runDir,
-      );
-      await Deno.writeTextFile(secondTurtle, "");
-      const secondEvidence = second.split("--evidence ")[1].replace(
-        ".sigil/tmp/<run-id>",
-        runDir,
-      );
-      const secondJob = second.split("--job ")[1].split(" ")[0].replace(
-        ".sigil/tmp/<run-id>",
-        runDir,
-      );
-      await Deno.writeTextFile(
-        secondEvidence,
-        JSON.stringify({
-          version: 2,
-          preparation: "fixture/preparation",
-          job: secondJob,
-          worker: "fixture/subagent",
-          ingest: "fixture/sigilc-ingest",
-          attempts: [{
-            turtle: secondTurtle,
-            result: `${secondTurtle}.result`,
-            exit: null,
-          }],
-        }),
-      );
-      await run(second);
     }
     if (command.startsWith("sigilc compile design")) {
       equal(report.world.state, "Loose");
@@ -268,22 +188,6 @@ try {
       equal(report.comparison.implementation, "Converged");
     }
   }
-  const status = await run("sigilc request status --root .");
-  equal(status.request.items[0].state, "converged");
-  await Deno.writeTextFile(
-    join(runDir, "completion.json"),
-    JSON.stringify({
-      version: 1,
-      nativeReports: ["fixture/status"],
-      artifacts: ["fixture/worlds"],
-      delivery: ["fixture/delivery"],
-      deletion: ["fixture/deletion"],
-      checks: ["fixture/checks"],
-    }),
-  );
-  await run(
-    "sigilc request record --root . --dossier .sigil/tmp/<run-id>/completion.json",
-  );
   console.log(
     `Validated skill ${version}: metadata, references and ${commands.length} native command examples (fixtures only).`,
   );

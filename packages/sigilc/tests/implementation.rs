@@ -41,11 +41,11 @@ fn facts(body: &str) -> Vec<turtle::Assertion> {
     turtle::parse(format!("@prefix s: <https://sigil.dev/ontology/1#> . @prefix : <urn:sigil:component:a.sigil:> . {body}").as_bytes(),TurtleLimits::default()).unwrap()
 }
 fn publish(root: &Workspace, store: &mut LockedStore, catalog: &Catalog, path: &str, body: &str) {
-    let binding = inputs::implementation(&capture(&root.0, path, 10000).unwrap(), catalog);
-    let job = store.prepare(binding.clone()).unwrap();
+    let current = inputs::implementation(&capture(&root.0, path, 10000).unwrap(), catalog);
+    let prepared = store.prepare(current.clone()).unwrap();
     let facts = facts(body);
     catalog.validate_implementation(&facts).unwrap();
-    store.publish(&job, &binding, &facts, None).unwrap();
+    store.publish(&prepared, &current, &facts).unwrap();
 }
 
 #[test]
@@ -148,10 +148,10 @@ fn cached_identity_is_revalidated_and_aggregate_inputs_are_bounded() {
             .contains("aggregate")
     );
     // Exercise an internally consistent cache with invalid side-specific data.
-    let binding = inputs::implementation(&capture(&root.0, "a.rs", 100).unwrap(), &catalog);
-    let job = store.prepare(binding.clone()).unwrap();
+    let current = inputs::implementation(&capture(&root.0, "a.rs", 100).unwrap(), &catalog);
+    let prepared = store.prepare(current.clone()).unwrap();
     store
-        .publish(&job, &binding, &facts(":Unknown s:uses :B ."), None)
+        .publish(&prepared, &current, &facts(":Unknown s:uses :B ."))
         .unwrap();
     assert!(
         implementation::assemble(&root.0, &selection(), &catalog, &store, 100)
